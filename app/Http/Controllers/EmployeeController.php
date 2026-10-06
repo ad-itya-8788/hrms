@@ -278,7 +278,7 @@ class EmployeeController extends Controller
                 $employeeAttributes = $this->onboardingEmployeeAttributes($validated);
                 $employeeAttributes['created_by'] = $request->user()->id;
                 $employee = Employee::create($employeeAttributes);
-                $employeeRole = UserRole::where('name', 'employee')
+                $employeeRole = UserRole::where('name', 'emp')
                     ->where('is_active', true)
                     ->lockForUpdate()
                     ->firstOrFail();

@@ -182,16 +182,23 @@ class DatabaseSeeder extends Seeder
             if (!$legacy || $legacy->id === $canonical[$targetName]) {
                 continue;
             }
-            DB::table('users')->where('role_id', $legacy->id)->update(['role_id' => $canonical[$targetName]]);
+            if (DB::table('users')->where('role_id', $legacy->id)->exists()) {
+                throw new \RuntimeException(
+                    "Cannot seed demo roles: the legacy '{$legacyName}' role is still assigned to existing users. "
+                    . 'Move those accounts to superadmin, hr, or emp before running this seeder.'
+                );
+            }
             DB::table('module_access')->where('role_id', $legacy->id)->delete();
             $legacy->delete();
         }
 
-        $extraRoleIds = UserRole::whereNotIn('name', ['superadmin', 'hr', 'emp'])->pluck('id');
-        if ($extraRoleIds->isNotEmpty()) {
-            DB::table('users')->whereIn('role_id', $extraRoleIds)->update(['role_id' => $canonical['emp']]);
-            DB::table('module_access')->whereIn('role_id', $extraRoleIds)->delete();
-            UserRole::whereIn('id', $extraRoleIds)->delete();
+        $extraRoles = UserRole::whereNotIn('name', ['superadmin', 'hr', 'emp'])->pluck('name');
+        if ($extraRoles->isNotEmpty()) {
+            throw new \RuntimeException(
+                'Cannot seed demo roles while additional user roles exist: '
+                . $extraRoles->implode(', ')
+                . '. Remove or migrate these roles explicitly before running this seeder.'
+            );
         }
 
         return $canonical;
