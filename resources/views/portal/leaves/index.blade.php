@@ -187,7 +187,7 @@
     }
 
     .leave-actions { display: flex; gap: 6px; }
-    .leave-actions button { padding: 6px 9px; border: 1px solid #b9e5c7; border-radius: 6px; background: #f0fdf4; color: #166534; font: 700 11px inherit; font-family: inherit; cursor: pointer; }
+    .leave-actions button { padding: 6px 9px; border: 1px solid #b9e5c7; border-radius: 6px; background: #f0fdf4; color: #166534; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer; }
     .leave-actions button.reject { border-color: #f2c6c2; background: #fff5f4; color: #a12b22; }
 
     .empty-state {

@@ -37,6 +37,10 @@
 .ep-meta-item small{display:block;margin-bottom:4px;color:var(--muted);font-size:11px;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
 .ep-meta-item strong{display:block;overflow-wrap:anywhere;color:var(--ink);font-size:13px;font-weight:700;line-height:1.45}
 .ep-reason{grid-column:1/-1;padding-top:11px;border-top:1px dashed var(--line)}
+.ep-review{display:flex;align-items:center;gap:8px;padding:0 20px 18px}
+.ep-review button{min-height:35px;padding:0 12px;border:1px solid #b9e5c7;border-radius:9px;background:#f0fbf3;color:#17653a;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.ep-review button.reject{border-color:#f2c6c2;background:#fff5f4;color:#a12b22}
+.ep-review button:hover{filter:brightness(.97)}
 .ep-pass-status{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid #fed7aa;border-radius:99px;background:#fff7ed;color:#b54708;font-size:12px;font-weight:750;white-space:nowrap}
 .ep-pass-status:before{width:7px;height:7px;border-radius:50%;background:#f79009;content:""}
 .ep-pass-status.is-approved,.ep-pass-status.is-completed{border-color:#b9e5c7;background:#f0fbf3;color:#17653a}
@@ -136,6 +140,16 @@
                             </div>
                         </div>
                     </div>
+                    @if ($canReviewExitPasses && $exitPass->status === 'Pending')
+                        @if (auth()->user()->isSuperAdmin() || (int) auth()->user()->employee_id !== (int) $exitPass->employee_id)
+                            <form class="ep-review" method="POST" action="{{ route('portal.exit-pass.status', $exitPass->id) }}">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" name="status" value="Approved">Approve request</button>
+                                <button class="reject" type="submit" name="status" value="Rejected">Reject request</button>
+                            </form>
+                        @endif
+                    @endif
                 </article>
             @endforeach
         </section>
