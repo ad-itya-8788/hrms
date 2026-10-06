@@ -37,9 +37,7 @@ class ExitPassController extends Controller
             'exitPasses' => $query->paginate(10),
             'canCreate' => $user->hasPermission('exit_pass', 'create'),
             'canViewEmployees' => $user->canViewEmployeeDirectory(),
-            'canReviewExitPasses' => $user->isSuperAdmin()
-                || ($user->hasPermission('exit_pass', 'edit') && !$isHead)
-                || $isHead,
+            'canReviewExitPasses' => $user->isSuperAdmin() || $isHead,
             'pageTitle' => 'Exit Passes',
         ]);
     }

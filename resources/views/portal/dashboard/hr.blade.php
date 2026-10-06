@@ -168,7 +168,7 @@
         <article class="hr-panel">
             <header class="hr-panel-head">
                 <div><h2>Department overview</h2><p>Active teams and their current workforce</p></div>
-                @if ($dashboard['can_view_departments'])
+                @if ($dashboard['can_manage_departments'])
                     <a class="hr-panel-link" href="{{ route('portal.departments.index') }}">Manage teams →</a>
                 @endif
             </header>
@@ -197,7 +197,7 @@
 
         <article class="hr-panel">
             <header class="hr-panel-head">
-                <div><h2>Department employees</h2><p>Employee records in your department</p></div>
+                <div><h2>{{ $dashboard['is_department_head'] ? 'Department employees' : 'All employees' }}</h2><p>{{ $dashboard['is_department_head'] ? 'All employee records within your department' : 'Employee records across the organization' }}</p></div>
                 @if ($dashboard['can_view_employees'])
                     <a class="hr-panel-link" href="{{ route('portal.employees.index') }}">View employees →</a>
                 @endif
@@ -205,7 +205,7 @@
             @if ($dashboard['can_view_employees'])
                 <div class="hr-table-wrap">
                     <table class="hr-table">
-                        <thead><tr><th>Employee</th><th>Department</th><th>Joined</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Employee</th><th>Department</th><th>Employee role</th><th>Email</th><th>Joined</th><th>Status</th></tr></thead>
                         <tbody>
                         @forelse ($dashboard['recent_employees'] as $employee)
                             <tr>
@@ -216,11 +216,13 @@
                                     </span>
                                 </td>
                                 <td>{{ optional($employee->department)->name ?: '—' }}</td>
+                                <td>{{ optional($employee->employeeRole)->name ?: '—' }}</td>
+                                <td>{{ $employee->email }}</td>
                                 <td>{{ $employee->joining_date ? $employee->joining_date->format('d M Y') : '—' }}</td>
                                 <td><span class="hr-tag">{{ ucwords(str_replace('_', ' ', $employee->employment_status)) }}</span></td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="hr-empty">No employee records found.</td></tr>
+                            <tr><td colspan="6" class="hr-empty">No employee records found.</td></tr>
                         @endforelse
                         </tbody>
                     </table>

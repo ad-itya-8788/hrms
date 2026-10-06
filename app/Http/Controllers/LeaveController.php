@@ -31,9 +31,7 @@ class LeaveController extends Controller
         return view('portal.leaves.index', [
             'leaves' => $leaves,
             'canCreateLeaves' => $user->hasPermission('leaves', 'create'),
-            'canReviewLeaves' => $user->isSuperAdmin()
-                || ($user->hasPermission('leaves', 'edit') && !$isHead)
-                || $isHead,
+            'canReviewLeaves' => $user->isSuperAdmin() || $isHead,
             'showEmployee' => !$user->isEmployeeAccount() || $isHead,
         ]);
     }

@@ -76,7 +76,9 @@ class User extends Authenticatable
             return collect();
         }
 
-        return Department::where('head_employee_id', $this->employee_id)->pluck('id');
+        return Department::where('head_employee_id', $this->employee_id)
+            ->where('is_active', true)
+            ->pluck('id');
     }
 
     public function isDepartmentHead()
@@ -89,6 +91,7 @@ class User extends Authenticatable
         return $this->employee_id
             && Department::where('id', $employee->department_id)
                 ->where('head_employee_id', $this->employee_id)
+                ->where('is_active', true)
                 ->exists();
     }
 
@@ -110,19 +113,29 @@ class User extends Authenticatable
         return $this->hasPermission('employees', 'view') || $this->isDepartmentHead();
     }
 
-    public function canReviewDepartmentRequest(Employee $employee, $module)
+    public function canManageEmployeeRecord(Employee $employee, $action)
     {
         if ($this->isSuperAdmin()) {
             return true;
         }
 
         if ($this->isDepartmentHead()) {
-            return (int) $this->employee_id !== (int) $employee->id
-                && $this->isDepartmentHeadOfEmployee($employee);
+            return $this->isDepartmentHeadOfEmployee($employee)
+                && $this->hasPermission('employees', $action);
         }
 
-        return (int) $this->employee_id !== (int) $employee->id
-            && $this->hasPermission($module, 'edit');
+        return $this->hasPermission('employees', $action);
+    }
+
+    public function canReviewDepartmentRequest(Employee $employee, $module)
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return in_array($module, ['leaves', 'exit_pass'], true)
+            && (int) $this->employee_id !== (int) $employee->id
+            && $this->isDepartmentHeadOfEmployee($employee);
     }
 
     public function hasPermission($module, $action = 'view')

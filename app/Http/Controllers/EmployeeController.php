@@ -139,7 +139,10 @@ class EmployeeController extends Controller
         ]);
         $employee->load($relations);
         $bankDetails = null;
-        if ($employee->bankDetails) {
+        $canViewBankDetails = ((int) $user->employee_id === (int) $employee->id
+                && $user->hasPermission('employee_profile', 'view'))
+            || $user->canManageEmployeeRecord($employee, 'edit');
+        if ($employee->bankDetails && $canViewBankDetails) {
             $bankDetails = [
                 'account_holder' => $employee->bankDetails->account_holder,
                 'account_number' => Crypt::decryptString($employee->bankDetails->account_number_encrypted),
@@ -385,7 +388,7 @@ class EmployeeController extends Controller
         $user = $request->user();
         $educationEmployee = Employee::findOrFail($education->employee_id);
         $canViewEmployee = $user->canViewEmployeeRecord($educationEmployee)
-            || $user->hasPermission('employees', 'edit');
+            || $user->canManageEmployeeRecord($educationEmployee, 'edit');
         $canViewOwnEducation = $user->hasPermission('employee_profile', 'view')
             && (int) $user->employee_id === (int) $education->employee_id;
 
@@ -433,8 +436,7 @@ class EmployeeController extends Controller
 
     public function update(Request $request, Employee $employee)
     {
-        abort_unless($request->user()->canViewEmployeeRecord($employee)
-            || $request->user()->hasPermission('employees', 'edit'), 403);
+        abort_unless($request->user()->canManageEmployeeRecord($employee, 'edit'), 403);
         $attributes = $request->validate($this->rules($employee));
 
         try {
@@ -454,8 +456,7 @@ class EmployeeController extends Controller
 
     public function updateStatus(Request $request, Employee $employee)
     {
-        abort_unless($request->user()->canViewEmployeeRecord($employee)
-            || $request->user()->hasPermission('employees', 'delete'), 403);
+        abort_unless($request->user()->canManageEmployeeRecord($employee, 'delete'), 403);
         $attributes = $request->validate(['is_active' => 'required|boolean']);
 
         try {

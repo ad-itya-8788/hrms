@@ -99,7 +99,7 @@ class DatabaseSeeder extends Seeder
                     'department_id' => $department['id'],
                     'employee_type_id' => $number % 5 === 0 ? $contract->id : $fullTime->id,
                     'employee_role_id' => $role->id,
-                    'manager_id' => $isHead ? null : $this->headEmployeeId($departments[$departmentIndex]),
+                    'manager_id' => $isHead ? null : $departments[$departmentIndex]['head_employee_id'],
                     'created_by' => $superAdmin->id,
                     'employment_status' => 'active',
                     'is_active' => true,
@@ -163,7 +163,6 @@ class DatabaseSeeder extends Seeder
 
     private function synchronizeUserRoles()
     {
-        $now = now();
         $canonical = [];
         foreach (['superadmin', 'hr', 'emp'] as $name) {
             $role = UserRole::firstOrCreate(['name' => $name], ['is_active' => true]);
@@ -218,8 +217,8 @@ class DatabaseSeeder extends Seeder
                 'employees' => ['view'],
                 'departments' => ['view'],
                 'holidays' => ['view'],
-                'leaves' => ['view', 'edit'],
-                'exit_pass' => ['view', 'edit'],
+                'leaves' => ['view', 'create'],
+                'exit_pass' => ['view', 'create'],
             ],
             'emp' => [
                 'dashboard' => ['view'],
@@ -259,10 +258,5 @@ class DatabaseSeeder extends Seeder
         $user->save();
 
         return $user;
-    }
-
-    private function headEmployeeId(array $department)
-    {
-        return $department['head_employee_id'] ?? null;
     }
 }

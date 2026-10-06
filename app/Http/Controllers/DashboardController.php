@@ -30,7 +30,7 @@ class DashboardController extends Controller
             ? $user->employee()->with(['department', 'employeeType', 'employeeRole', 'manager', 'documents'])->first()
             : null;
         $canViewEmployees = $user->hasPermission('employees', 'view') || $isDepartmentHead;
-        $canViewDepartments = $user->hasPermission('departments', 'view');
+        $canViewDepartments = $user->hasPermission('departments', 'view') || $isDepartmentHead;
         $canViewLeaves = $user->hasPermission('leaves', 'view') || $isDepartmentHead;
         $canViewExitPasses = $user->hasPermission('exit_pass', 'view') || $isDepartmentHead;
         $canViewHolidays = $user->hasPermission('holidays', 'view');
@@ -81,12 +81,14 @@ class DashboardController extends Controller
                 'can_view_employees' => $canViewEmployees,
                 'can_create_employees' => $user->hasPermission('employees', 'create'),
                 'can_view_departments' => $canViewDepartments,
+                'can_manage_departments' => $user->hasPermission('departments', 'view'),
                 'can_view_leaves' => $canViewLeaves,
-                'can_review_leaves' => $canViewLeaves && ($isDepartmentHead || $user->hasPermission('leaves', 'edit')),
+                'can_review_leaves' => $canViewLeaves && ($isDepartmentHead || $user->isSuperAdmin()),
                 'can_view_exit_passes' => $canViewExitPasses,
-                'can_review_exit_passes' => $canViewExitPasses && ($isDepartmentHead || $user->hasPermission('exit_pass', 'edit')),
+                'can_review_exit_passes' => $canViewExitPasses && ($isDepartmentHead || $user->isSuperAdmin()),
                 'can_view_holidays' => $canViewHolidays,
                 'is_department_head_employee' => $employeeRole && $isDepartmentHead,
+                'is_department_head' => $isDepartmentHead,
                 'employee_profile' => $employee,
                 'departments' => $canViewDepartments
                     ? $departmentQuery
@@ -100,10 +102,8 @@ class DashboardController extends Controller
                         ->get()
                     : collect(),
                 'recent_employees' => $canViewEmployees
-                    ? $employeeQuery()->with('department')
-                        ->where('employment_status', '!=', 'inactive')
+                    ? $employeeQuery()->with(['department', 'employeeRole'])
                         ->orderByDesc('joining_date')
-                        ->limit(100)
                         ->get()
                     : collect(),
                 'pending_leave_requests' => $canViewLeaves && $canViewEmployees
