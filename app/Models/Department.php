@@ -12,7 +12,7 @@ class Department extends Model
         'location',
         'email',
         'contact_no',
-        'head',
+        'head_employee_id',
         'is_active',
     ];
 
@@ -23,5 +23,10 @@ class Department extends Model
     public function employees()
     {
         return $this->hasMany(Employee::class);
+    }
+
+    public function headEmployee()
+    {
+        return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 }

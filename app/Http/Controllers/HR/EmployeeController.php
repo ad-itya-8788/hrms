@@ -167,11 +167,16 @@ class EmployeeController extends Controller
         $query = Employee::with($this->relations)->where('is_active', $recordStatus === 'active');
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
-            $query->where(function ($builder) use ($search) {
-                $builder->where('first_name', 'like', '%' . $search . '%')
-                    ->orWhere('last_name', 'like', '%' . $search . '%')
-                    ->orWhere('employee_code', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . $search . '%');
+            $searchTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+            $query->where(function ($builder) use ($searchTerms) {
+                foreach ($searchTerms as $term) {
+                    $builder->where(function ($termQuery) use ($term) {
+                        $termQuery->where('first_name', 'like', '%' . $term . '%')
+                            ->orWhere('last_name', 'like', '%' . $term . '%')
+                            ->orWhere('employee_code', 'like', '%' . $term . '%')
+                            ->orWhere('email', 'like', '%' . $term . '%');
+                    });
+                }
             });
         }
         foreach (['department_id', 'employee_type_id', 'employee_role_id'] as $filter) {
@@ -692,7 +697,7 @@ class EmployeeController extends Controller
 
         foreach ($uploads as $upload) {
             $file = $upload['file'];
-            $path = $file->store('employee-documents/' . $employee->id, 'local');
+            $path = $file->store('employee-documents', 'local');
             if (!$path) {
                 throw new \RuntimeException('The employee document could not be stored.');
             }

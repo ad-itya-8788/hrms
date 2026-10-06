@@ -1,1452 +1,1334 @@
 @extends('layouts.portal')
 
 @section('content')
-    @php
-        $user = auth()->user();
-        $isSuper = $user->isSuperAdmin();
-        $nonce = function_exists('csp_nonce') ? csp_nonce() : null;
-        $can = [];
-        foreach (['create', 'view', 'edit', 'delete'] as $action) {
-            $can[$action] = $user->hasPermission('departments', $action);
-        }
-        $activeN = (int) $activeDepartmentCount;
-        $inactiveN = (int) $inactiveDepartmentCount;
-        $allN = $activeN + $inactiveN;
-        $share = $allN > 0 ? round(($activeN / $allN) * 100) : 0;
-        $eyebrow = ($isSuper ? 'Super admin' : ucwords(str_replace('_', ' ', $user->role))) . ' · Organisation';
-    @endphp
 
-    {{-- Icon sprite: one definition shared by server-rendered and JS-rendered rows --}}
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-        <symbol id="dp-i-view" viewBox="0 0 24 24">
-            <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
-            <circle cx="12" cy="12" r="2.8" />
-        </symbol>
-        <symbol id="dp-i-edit" viewBox="0 0 24 24">
-            <path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17v3z" />
-            <path d="M14.5 7.5l3 3" />
-        </symbol>
-        <symbol id="dp-i-off" viewBox="0 0 24 24">
-            <path d="M12 3v8" />
-            <path d="M6.4 6.8a8 8 0 1011.2 0" />
-        </symbol>
-        <symbol id="dp-i-on" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M8 12.5l2.7 2.7L16 9.5" />
-        </symbol>
-    </svg>
+@php
+    $user = auth()->user();
 
-    <div class="dp">
+    $canCreate = $user->hasPermission('departments', 'create');
+    $canView   = $user->hasPermission('departments', 'view');
+    $canEdit   = $user->hasPermission('departments', 'edit');
 
-        <header class="dp-head dp-in" style="--i:0">
+    $activeCount = (int) $activeDepartmentCount;
+    $inactiveCount = (int) $inactiveDepartmentCount;
+    $totalCount = $activeCount + $inactiveCount;
+
+    $activePercent = $totalCount
+        ? round(($activeCount / $totalCount) * 100)
+        : 0;
+@endphp
+
+<style>
+.dept-page{max-width:1400px;margin:auto;padding:28px;color:#172033}
+.dept-header{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:24px}
+.dept-eyebrow{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#64748b}
+.dept-header h1{margin:0;font-size:30px;font-weight:800;color:#111827}
+.dept-subtitle{margin:7px 0 0;color:#64748b;font-size:14px}
+
+.dept-btn{border:0;border-radius:8px;padding:11px 17px;font-weight:700;cursor:pointer;font-size:13px}
+.dept-btn-primary{background:#111827;color:#fff}
+.dept-btn-primary:hover{background:#000}
+.dept-btn-light{background:#f1f5f9;color:#334155}
+
+.dept-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+.dept-stat{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px}
+.dept-stat-label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+.dept-stat-value{margin-top:7px;font-size:27px;font-weight:800;color:#111827}
+.dept-stat-note{margin-top:4px;font-size:12px;color:#64748b}
+
+.dept-card{background:#fff;border:1px solid #e5e7eb;border-radius:13px;overflow:hidden}
+.dept-status-tabs{display:flex;gap:7px;padding:14px 20px 0}
+.dept-status-tabs a{text-decoration:none;padding:8px 13px;border-radius:7px;font-size:13px;font-weight:700;color:#64748b;background:#f8fafc}
+.dept-status-tabs a.active{background:#111827;color:#fff}
+
+.dept-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:17px 20px;border-bottom:1px solid #e5e7eb}
+.dept-toolbar h2{margin:0;font-size:17px;font-weight:800;color:#111827}
+.dept-toolbar p{margin:4px 0 0;font-size:12px;color:#64748b}
+.dept-search{width:270px}
+.dept-search input{width:100%;height:40px;padding:0 13px;border:1px solid #d7dde5;border-radius:8px;outline:0;font-size:13px;box-sizing:border-box}
+.dept-search input:focus{border-color:#64748b}
+
+.dept-table-wrap{overflow-x:auto}
+.dept-table{width:100%;border-collapse:collapse;min-width:950px}
+.dept-table th{padding:13px 20px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;background:#f8fafc;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+.dept-table td{padding:15px 20px;border-bottom:1px solid #edf0f3;font-size:13px;color:#475569;vertical-align:middle}
+.dept-table tbody tr:hover{background:#fafafa}
+.dept-code{display:inline-block;padding:5px 8px;border-radius:6px;background:#f1f5f9;color:#334155;font-size:11px;font-weight:800}
+.dept-name{color:#111827;font-weight:750}
+
+.dept-head{display:flex;align-items:center;gap:9px;min-width:180px}
+.dept-avatar{width:34px;height:34px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#334155;font-weight:800;font-size:11px}
+.dept-head-name{font-weight:700;color:#1f2937}
+.dept-head-code{display:block;margin-top:2px;font-size:11px;color:#94a3b8}
+
+.dept-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
+.dept-status-dot{width:7px;height:7px;border-radius:50%;background:#16a34a}
+.dept-status.inactive .dept-status-dot{background:#94a3b8}
+
+.dept-actions{display:flex;gap:6px;white-space:nowrap}
+.dept-action{border:1px solid #e2e8f0;background:#fff;color:#475569;border-radius:7px;padding:7px 10px;cursor:pointer;font-size:12px;font-weight:700}
+.dept-action:hover{background:#f8fafc}
+
+.dept-empty{text-align:center;padding:55px 20px!important;color:#94a3b8!important}
+.dept-pagination{padding:15px 20px}
+.dept-pagination nav{display:flex;justify-content:center}
+
+/* MODAL */
+.dept-modal-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    background:rgba(15,23,42,.48);
+    padding:20px;
+    overflow:auto;
+}
+.dept-modal-backdrop.show{display:flex;align-items:center;justify-content:center}
+
+.dept-modal{
+    width:100%;
+    max-width:650px;
+    background:#fff;
+    border-radius:14px;
+    box-shadow:0 25px 70px rgba(0,0,0,.2);
+    animation:deptModal .18s ease;
+}
+@keyframes deptModal{
+    from{opacity:0;transform:translateY(10px) scale(.98)}
+    to{opacity:1;transform:none}
+}
+
+.dept-modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:19px 22px;
+    border-bottom:1px solid #e5e7eb;
+}
+.dept-modal-head h3{margin:0;font-size:19px;color:#111827}
+.dept-modal-close{border:0;background:transparent;font-size:25px;color:#64748b;cursor:pointer}
+
+.dept-form{padding:22px}
+.dept-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dept-field{display:flex;flex-direction:column;gap:6px}
+.dept-field.full{grid-column:1/-1}
+.dept-field label{font-size:12px;font-weight:750;color:#334155}
+.dept-field input{width:100%;height:42px;padding:0 11px;border:1px solid #d7dde5;border-radius:8px;outline:0;font-size:13px;box-sizing:border-box}
+.dept-field input:focus{border-color:#64748b}
+.dept-error{font-size:11px;color:#dc2626;min-height:13px}
+
+/* SEARCHABLE EMPLOYEE */
+.employee-picker{position:relative}
+.employee-search-wrap{position:relative}
+.employee-search{
+    width:100%;
+    height:42px;
+    padding:0 38px 0 12px;
+    border:1px solid #d7dde5;
+    border-radius:8px;
+    outline:0;
+    font-size:13px;
+    box-sizing:border-box;
+}
+.employee-search:focus{border-color:#64748b}
+.employee-search-icon{
+    position:absolute;
+    right:12px;
+    top:12px;
+    color:#94a3b8;
+    font-size:15px;
+}
+.employee-selected{
+    display:none;
+    margin-top:7px;
+    padding:8px 10px;
+    border:1px solid #e2e8f0;
+    border-radius:8px;
+    background:#f8fafc;
+    align-items:center;
+    justify-content:space-between;
+}
+.employee-selected.show{display:flex}
+.employee-selected-info strong{display:block;font-size:12px;color:#1f2937}
+.employee-selected-info span{font-size:10px;color:#94a3b8}
+.employee-remove{
+    border:0;
+    background:transparent;
+    color:#64748b;
+    cursor:pointer;
+    font-size:16px;
+}
+
+.employee-results{
+    display:none;
+    position:absolute;
+    left:0;
+    right:0;
+    top:49px;
+    z-index:20;
+    background:#fff;
+    border:1px solid #dfe4ea;
+    border-radius:9px;
+    box-shadow:0 12px 30px rgba(15,23,42,.12);
+    max-height:220px;
+    overflow-y:auto;
+}
+.employee-results.show{display:block}
+
+.employee-result{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    border:0;
+    background:#fff;
+    text-align:left;
+    cursor:pointer;
+}
+.employee-result:hover{background:#f8fafc}
+.employee-result-avatar{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    background:#f1f5f9;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:10px;
+    font-weight:800;
+    color:#334155;
+}
+.employee-result strong{display:block;font-size:12px;color:#1f2937}
+.employee-result span{font-size:10px;color:#94a3b8}
+.employee-no-result{padding:14px;text-align:center;color:#94a3b8;font-size:12px}
+
+/* VIEW MODAL */
+.view-modal{max-width:560px}
+.view-body{padding:22px}
+.view-title{display:flex;align-items:center;gap:13px;margin-bottom:20px}
+.view-avatar{width:52px;height:52px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#334155}
+.view-title h4{margin:0;font-size:20px;color:#111827}
+.view-title p{margin:4px 0 0;color:#64748b;font-size:12px}
+.view-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.view-item{border:1px solid #edf0f3;border-radius:9px;padding:12px}
+.view-item label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;font-weight:700;margin-bottom:5px}
+.view-item strong{font-size:13px;color:#1f2937}
+.view-status{display:inline-flex;align-items:center;gap:5px}
+.view-status i{width:7px;height:7px;border-radius:50%;background:#16a34a}
+.view-status.off i{background:#94a3b8}
+
+.dept-modal-foot{
+    display:flex;
+    justify-content:flex-end;
+    gap:9px;
+    padding:16px 22px;
+    border-top:1px solid #e5e7eb;
+}
+
+.dept-alert{display:none;margin-bottom:15px;padding:10px 12px;border-radius:8px;font-size:12px}
+.dept-alert.show{display:block}
+.dept-alert.error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.dept-alert.success{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+
+@media(max-width:800px){
+    .dept-page{padding:18px}
+    .dept-header{align-items:flex-start;flex-direction:column}
+    .dept-summary{grid-template-columns:1fr}
+    .dept-toolbar{align-items:flex-start;flex-direction:column}
+    .dept-search{width:100%}
+    .dept-form-grid,.view-grid{grid-template-columns:1fr}
+    .dept-field.full{grid-column:auto}
+}
+</style>
+
+
+<div class="dept-page">
+
+    <header class="dept-header">
+        <div>
+            <p class="dept-eyebrow">Super Admin · Organisation</p>
+            <h1>Departments</h1>
+            <p class="dept-subtitle">
+                Manage departments and their assigned department heads.
+            </p>
+        </div>
+
+        @if ($canCreate)
+            <button type="button"
+                    class="dept-btn dept-btn-primary"
+                    onclick="openDepartmentModal()">
+                + Add Department
+            </button>
+        @endif
+    </header>
+
+    <div id="dept-alert" class="dept-alert"></div>
+
+    <section class="dept-summary">
+
+        <div class="dept-stat">
+            <div class="dept-stat-label">Total Departments</div>
+            <div class="dept-stat-value">{{ $totalCount }}</div>
+            <div class="dept-stat-note">All departments</div>
+        </div>
+
+        <div class="dept-stat">
+            <div class="dept-stat-label">Active</div>
+            <div class="dept-stat-value">{{ $activeCount }}</div>
+            <div class="dept-stat-note">{{ $activePercent }}% currently active</div>
+        </div>
+
+        <div class="dept-stat">
+            <div class="dept-stat-label">Inactive</div>
+            <div class="dept-stat-value">{{ $inactiveCount }}</div>
+            <div class="dept-stat-note">Currently disabled</div>
+        </div>
+
+    </section>
+
+    <section class="dept-card">
+
+        <div class="dept-status-tabs">
+            <a href="{{ route('portal.departments.index', ['status'=>'active']) }}"
+               class="{{ $selectedStatus === 'active' ? 'active' : '' }}">
+                Active {{ $activeCount }}
+            </a>
+
+            <a href="{{ route('portal.departments.index', ['status'=>'inactive']) }}"
+               class="{{ $selectedStatus === 'inactive' ? 'active' : '' }}">
+                Inactive {{ $inactiveCount }}
+            </a>
+        </div>
+
+        <div class="dept-toolbar">
+
             <div>
-                <p class="dp-eyebrow">{{ $eyebrow }}</p>
-                <h1>Departments</h1>
-                <p class="dp-sub">Create and maintain your company departments.</p>
+                <h2>Department List</h2>
+                <p>{{ $departments->total() }} {{ $selectedStatus }} departments</p>
             </div>
-            @if ($can['create'])
-                <button class="dp-btn dp-solid" type="button" data-dp-create>
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" />
-                    </svg>Add department
+
+            <div class="dept-search">
+                <input type="search"
+                       id="department-search"
+                       placeholder="Search department, code or head...">
+            </div>
+
+        </div>
+
+        <div class="dept-table-wrap">
+
+            <table class="dept-table">
+
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Department</th>
+                        <th>Location</th>
+                        <th>Email</th>
+                        <th>Contact</th>
+                        <th>Department Head</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                @forelse ($departments as $department)
+
+                    @php
+                        $head = $department->headEmployee;
+
+                        $headName = $head
+                            ? trim($head->first_name . ' ' . $head->last_name)
+                            : 'Not assigned';
+
+                        $initials = $head
+                            ? strtoupper(
+                                substr($head->first_name,0,1) .
+                                substr($head->last_name,0,1)
+                              )
+                            : '--';
+                    @endphp
+
+                    <tr data-department-row
+                        data-search="{{ strtolower($department->code.' '.$department->name.' '.$department->location.' '.$department->email.' '.$headName) }}">
+
+                        <td>
+                            <span class="dept-code">
+                                {{ $department->code }}
+                            </span>
+                        </td>
+
+                        <td>
+                            <span class="dept-name">
+                                {{ $department->name }}
+                            </span>
+                        </td>
+
+                        <td>{{ $department->location }}</td>
+
+                        <td>{{ $department->email }}</td>
+
+                        <td>{{ $department->contact_no }}</td>
+
+                        <td>
+                            <div class="dept-head">
+
+                                <div class="dept-avatar">
+                                    {{ $initials }}
+                                </div>
+
+                                <div>
+                                    <span class="dept-head-name">
+                                        {{ $headName }}
+                                    </span>
+
+                                    @if ($head && $head->employee_code)
+                                        <span class="dept-head-code">
+                                            {{ $head->employee_code }}
+                                        </span>
+                                    @endif
+                                </div>
+
+                            </div>
+                        </td>
+
+                        <td>
+                            <span class="dept-status {{ !$department->is_active ? 'inactive' : '' }}">
+                                <span class="dept-status-dot"></span>
+                                {{ $department->is_active ? 'Active' : 'Inactive' }}
+                            </span>
+                        </td>
+
+                        <td>
+                            <div class="dept-actions">
+
+                                @if ($canView)
+                                    <button class="dept-action"
+                                            type="button"
+                                            onclick="viewDepartment({{ $department->id }})">
+                                        View
+                                    </button>
+                                @endif
+
+                                @if ($canEdit)
+                                    <button class="dept-action"
+                                            type="button"
+                                            onclick="editDepartment({{ $department->id }})">
+                                        Edit
+                                    </button>
+
+                                    <button class="dept-action"
+                                            type="button"
+                                            onclick="toggleDepartment(
+                                                {{ $department->id }},
+                                                {{ $department->is_active ? 0 : 1 }}
+                                            )">
+                                        {{ $department->is_active ? 'Deactivate' : 'Activate' }}
+                                    </button>
+                                @endif
+
+                            </div>
+                        </td>
+
+                    </tr>
+
+                @empty
+
+                    <tr>
+                        <td colspan="8" class="dept-empty">
+                            No {{ $selectedStatus }} departments found.
+                        </td>
+                    </tr>
+
+                @endforelse
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <div class="dept-pagination">
+            {{ $departments->links() }}
+        </div>
+
+    </section>
+
+</div>
+
+
+{{-- ADD / EDIT MODAL --}}
+<div class="dept-modal-backdrop" id="department-modal">
+
+    <div class="dept-modal">
+
+        <div class="dept-modal-head">
+            <h3 id="department-modal-title">Add Department</h3>
+
+            <button type="button"
+                    class="dept-modal-close"
+                    onclick="closeDepartmentModal()">
+                &times;
+            </button>
+        </div>
+
+        <form id="department-form">
+
+            <div class="dept-form">
+
+                <div id="form-error" class="dept-alert error"></div>
+
+                <div class="dept-form-grid">
+
+                    <div class="dept-field">
+                        <label>Department Code *</label>
+
+                        <input id="department-code"
+                               name="code"
+                               maxlength="16"
+                               placeholder="e.g. ENG">
+
+                        <small id="error-code" class="dept-error"></small>
+                    </div>
+
+                    <div class="dept-field">
+                        <label>Department Name *</label>
+
+                        <input id="department-name"
+                               name="name"
+                               maxlength="100"
+                               placeholder="e.g. Engineering">
+
+                        <small id="error-name" class="dept-error"></small>
+                    </div>
+
+                    <div class="dept-field">
+                        <label>Location *</label>
+
+                        <input id="department-location"
+                               name="location"
+                               maxlength="100"
+                               placeholder="e.g. Pune">
+
+                        <small id="error-location" class="dept-error"></small>
+                    </div>
+
+                    <div class="dept-field">
+                        <label>Department Email *</label>
+
+                        <input id="department-email"
+                               type="email"
+                               name="email"
+                               maxlength="190"
+                               placeholder="engineering@company.com">
+
+                        <small id="error-email" class="dept-error"></small>
+                    </div>
+
+                    <div class="dept-field">
+                        <label>Contact Number *</label>
+
+                        <input id="department-contact"
+                               name="contact_no"
+                               maxlength="20"
+                               placeholder="+91 9876543210">
+
+                        <small id="error-contact_no" class="dept-error"></small>
+                    </div>
+
+                    {{-- SEARCHABLE HEAD --}}
+                    <div class="dept-field">
+                        <label>Department Head *</label>
+
+                        <div class="employee-picker">
+
+                            <div class="employee-search-wrap">
+
+                                <input type="text"
+                                       id="employee-search"
+                                       class="employee-search"
+                                       autocomplete="off"
+                                       placeholder="Search employee by name or ID">
+
+                                <span class="employee-search-icon">⌕</span>
+
+                            </div>
+
+                            <div id="employee-results"
+                                 class="employee-results">
+
+                                @foreach ($employees as $employee)
+
+                                    @php
+                                        $employeeName = trim(
+                                            $employee->first_name . ' ' .
+                                            $employee->last_name
+                                        );
+
+                                        $employeeInitials = strtoupper(
+                                            substr($employee->first_name,0,1) .
+                                            substr($employee->last_name,0,1)
+                                        );
+                                    @endphp
+
+                                    <button type="button"
+                                            class="employee-result"
+                                            data-id="{{ $employee->id }}"
+                                            data-name="{{ $employeeName }}"
+                                            data-code="{{ $employee->employee_code }}"
+                                            data-search="{{ strtolower($employeeName.' '.$employee->employee_code) }}">
+
+                                        <span class="employee-result-avatar">
+                                            {{ $employeeInitials }}
+                                        </span>
+
+                                        <span>
+                                            <strong>{{ $employeeName }}</strong>
+                                            <span>{{ $employee->employee_code }}</span>
+                                        </span>
+
+                                    </button>
+
+                                @endforeach
+
+                            </div>
+
+                            <div id="employee-selected"
+                                 class="employee-selected">
+
+                                <div class="employee-selected-info">
+                                    <strong id="selected-employee-name"></strong>
+                                    <span id="selected-employee-code"></span>
+                                </div>
+
+                                <button type="button"
+                                        class="employee-remove"
+                                        onclick="clearEmployee()">
+                                    &times;
+                                </button>
+
+                            </div>
+
+                            <input type="hidden"
+                                   id="department-head"
+                                   name="head_employee_id">
+
+                        </div>
+
+                        <small id="error-head_employee_id"
+                               class="dept-error"></small>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="dept-modal-foot">
+
+                <button type="button"
+                        class="dept-btn dept-btn-light"
+                        onclick="closeDepartmentModal()">
+                    Cancel
                 </button>
-            @endif
-        </header>
 
-        <div class="dp-notice" id="dp-alert" role="status" aria-live="polite" hidden></div>
+                <button type="submit"
+                        class="dept-btn dept-btn-primary"
+                        id="department-save">
+                    Save Department
+                </button>
 
-        {{-- Status switch + active share graph --}}
-        <section class="dp-card dp-overview dp-in" style="--i:1" aria-label="Department status">
-            <div class="dp-switch" role="group" aria-label="Filter departments by status">
-                <a class="{{ $selectedStatus === 'active' ? 'is-on' : '' }}"
-                    href="{{ route('portal.departments.index', ['status' => 'active']) }}"
-                    @if ($selectedStatus === 'active') aria-current="true" @endif>Active <b
-                        data-active-count>{{ $activeN }}</b></a>
-                <a class="{{ $selectedStatus === 'inactive' ? 'is-on' : '' }}"
-                    href="{{ route('portal.departments.index', ['status' => 'inactive']) }}"
-                    @if ($selectedStatus === 'inactive') aria-current="true" @endif>Inactive <b
-                        data-inactive-count>{{ $inactiveN }}</b></a>
-            </div>
-            <div class="dp-ratio">
-                <div class="dp-ratio-top"><strong><span data-share>{{ $share }}</span>% active</strong><span>of all
-                        departments</span></div>
-                <div class="dp-rail" id="dp-ratio" style="--w: {{ $share }}%"><i></i></div>
-            </div>
-        </section>
-
-        <section class="dp-card dp-in" style="--i:2" id="dp-panel" data-status="{{ e($selectedStatus) }}"
-            data-can-view="{{ $can['view'] ? 1 : 0 }}" data-can-edit="{{ $can['edit'] ? 1 : 0 }}"
-            data-can-delete="{{ $can['delete'] ? 1 : 0 }}" data-list-url="{{ route('portal.data.departments.index') }}"
-            data-show-url="{{ route('portal.data.departments.show', '__department__') }}"
-            data-update-url="{{ route('portal.data.departments.update', '__department__') }}"
-            data-status-url="{{ route('portal.data.departments.status', '__department__') }}">
-
-            <div class="dp-ph">
-                <div>
-                    <h2>Department list</h2>
-                    <p><span data-dp-total>{{ number_format($departments->total()) }}</span> {{ $selectedStatus }}
-                        departments</p>
-                </div>
-                <label class="dp-search" for="dp-search">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="6.5" />
-                        <path d="M16 16l4 4" />
-                    </svg>
-                    <input id="dp-search" type="search" placeholder="Search departments" aria-label="Search departments"
-                        autocomplete="off">
-                </label>
             </div>
 
-            <div class="dp-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Code</th>
-                            <th>Department</th>
-                            <th class="dp-md">Location</th>
-                            <th class="dp-lg">Email</th>
-                            <th class="dp-lg">Contact</th>
-                            <th class="dp-md">Head</th>
-                            <th>Status</th>
-                            <th><span class="dp-sr">Actions</span></th>
-                        </tr>
-                    </thead>
-                    <tbody id="dp-rows" aria-live="polite">
-                        @forelse ($departments as $department)
-                            <tr>
-                                <td><span class="dp-code">{{ $department->code }}</span></td>
-                                <td>
-                                    <div class="dp-name"><span
-                                            class="dp-av dp-a{{ $department->id % 6 }}">{{ mb_strtoupper(mb_substr($department->name, 0, 1)) }}</span><strong>{{ $department->name }}</strong>
-                                    </div>
-                                </td>
-                                <td class="dp-md">{{ $department->location }}</td>
-                                <td class="dp-lg">{{ $department->email }}</td>
-                                <td class="dp-lg">{{ $department->contact_no }}</td>
-                                <td class="dp-md">{{ $department->head }}</td>
-                                <td><span
-                                        class="dp-status {{ $department->is_active ? 'is-active' : '' }}"><i></i>{{ $department->is_active ? 'Active' : 'Inactive' }}</span>
-                                </td>
-                                <td class="dp-actions">
-                                    @if ($can['view'])
-                                        <button class="dp-act is-view" type="button" title="View"
-                                            aria-label="View {{ $department->name }}"
-                                            data-dp-view="{{ $department->id }}"><svg class="dp-ico" aria-hidden="true">
-                                                <use href="#dp-i-view" />
-                                            </svg></button>
-                                    @endif
-                                    @if ($can['edit'])
-                                        <button class="dp-act is-edit" type="button" title="Edit"
-                                            aria-label="Edit {{ $department->name }}"
-                                            data-dp-edit="{{ $department->id }}"><svg class="dp-ico" aria-hidden="true">
-                                                <use href="#dp-i-edit" />
-                                            </svg></button>
-                                    @endif
-                                    @if ($can['delete'])
-                                        @php $label = $department->is_active ? 'Deactivate' : 'Activate'; @endphp
-                                        <button class="dp-act {{ $department->is_active ? 'is-off' : 'is-on' }}"
-                                            type="button" title="{{ $label }}"
-                                            aria-label="{{ $label }} {{ $department->name }}"
-                                            data-dp-status="{{ $department->id }}"
-                                            data-next-status="{{ $department->is_active ? 0 : 1 }}"><svg class="dp-ico"
-                                                aria-hidden="true">
-                                                <use href="#dp-i-{{ $department->is_active ? 'off' : 'on' }}" />
-                                            </svg></button>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="8" class="dp-empty">No departments found.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+        </form>
 
-            <div class="dp-foot">
-                <span data-dp-summary>Showing {{ $departments->firstItem() ?: 0 }}–{{ $departments->lastItem() ?: 0 }} of
-                    {{ number_format($departments->total()) }} departments</span>
-                <div class="dp-pager">
-                    <button class="dp-btn dp-ghost dp-sm" type="button" data-dp-prev
-                        {{ $departments->currentPage() <= 1 ? 'disabled' : '' }}>Previous</button>
-                    <span data-dp-page>Page {{ $departments->currentPage() }} of
-                        {{ max(1, $departments->lastPage()) }}</span>
-                    <button class="dp-btn dp-ghost dp-sm" type="button" data-dp-next
-                        {{ $departments->currentPage() >= $departments->lastPage() ? 'disabled' : '' }}>Next</button>
-                </div>
-            </div>
-        </section>
     </div>
+</div>
 
-    @if ($can['create'] || $can['edit'])
-        <dialog class="dp-modal" id="dp-modal" aria-labelledby="dp-modal-title">
-            <div class="dp-mhead">
+
+{{-- VIEW MODAL --}}
+<div class="dept-modal-backdrop" id="view-department-modal">
+
+    <div class="dept-modal view-modal">
+
+        <div class="dept-modal-head">
+            <h3>Department Details</h3>
+
+            <button type="button"
+                    class="dept-modal-close"
+                    onclick="closeViewModal()">
+                &times;
+            </button>
+        </div>
+
+        <div class="view-body">
+
+            <div class="view-title">
+
+                <div class="view-avatar"
+                     id="view-initials">
+                    --
+                </div>
+
                 <div>
-                    <p class="dp-eyebrow">{{ $eyebrow }}</p>
-                    <h2 id="dp-modal-title">Add department</h2>
-                    <p>Enter the required department information.</p>
+                    <h4 id="view-name">Department</h4>
+                    <p id="view-code">Department code</p>
                 </div>
-                <button class="dp-x" type="button" data-dp-close aria-label="Close dialog">×</button>
+
             </div>
-            <form id="dp-form" data-store-url="{{ route('portal.data.departments.store') }}" novalidate>
-                @csrf
-                <div class="dp-grid">
-                    <label>Department code
-                        <input name="code" maxlength="16" required autocomplete="off" autocapitalize="characters"
-                            spellcheck="false" placeholder="e.g. HR01" aria-describedby="dp-e-code">
-                        <small class="dp-fe" id="dp-e-code" role="alert"></small>
-                    </label>
-                    <label>Department name
-                        <input name="name" maxlength="100" required autocomplete="off"
-                            placeholder="e.g. Human Resources" aria-describedby="dp-e-name">
-                        <small class="dp-fe" id="dp-e-name" role="alert"></small>
-                    </label>
-                    <label>Location
-                        <input name="location" maxlength="100" required autocomplete="off"
-                            placeholder="e.g. Pune, Maharashtra" aria-describedby="dp-e-location">
-                        <small class="dp-fe" id="dp-e-location" role="alert"></small>
-                    </label>
-                    <label>Email
-                        <input name="email" type="email" maxlength="190" required autocomplete="off"
-                            inputmode="email" spellcheck="false" placeholder="name@company.com"
-                            aria-describedby="dp-e-email">
-                        <small class="dp-fe" id="dp-e-email" role="alert"></small>
-                    </label>
-                    <label>Contact number
-                        <input name="contact_no" type="tel" maxlength="10" minlength="10" pattern="[0-9]{10}"
-                            required autocomplete="off" inputmode="numeric" placeholder="10 digits, e.g. 9876543210"
-                            aria-describedby="dp-e-contact_no">
-                        <small class="dp-fe" id="dp-e-contact_no" role="alert"></small>
-                    </label>
-                    <label>Department head
-                        <input name="head" maxlength="120" required autocomplete="off"
-                            placeholder="e.g. Priya Sharma" aria-describedby="dp-e-head">
-                        <small class="dp-fe" id="dp-e-head" role="alert"></small>
-                    </label>
-                </div>
-                <div class="dp-error" role="alert" hidden></div>
-                <div class="dp-mfoot">
-                    <button class="dp-btn dp-ghost" type="button" data-dp-close>Cancel</button>
-                    <button class="dp-btn dp-solid" type="submit">Save department</button>
-                </div>
-            </form>
-        </dialog>
-    @endif
 
-    @if ($can['view'])
-        <dialog class="dp-modal" id="dp-view-modal" aria-labelledby="dp-view-title">
-            <div class="dp-mhead">
-                <div>
-                    <p class="dp-eyebrow">{{ $eyebrow }}</p>
-                    <h2 id="dp-view-title">Department details</h2>
+            <div class="view-grid">
+
+                <div class="view-item">
+                    <label>Location</label>
+                    <strong id="view-location">-</strong>
                 </div>
-                <button class="dp-x" type="button" data-dp-close aria-label="Close dialog">×</button>
+
+                <div class="view-item">
+                    <label>Contact</label>
+                    <strong id="view-contact">-</strong>
+                </div>
+
+                <div class="view-item">
+                    <label>Email</label>
+                    <strong id="view-email">-</strong>
+                </div>
+
+                <div class="view-item">
+                    <label>Status</label>
+                    <strong id="view-status" class="view-status">
+                        <i></i>
+                        Active
+                    </strong>
+                </div>
+
+                <div class="view-item"
+                     style="grid-column:1/-1">
+
+                    <label>Department Head</label>
+
+                    <strong id="view-head">
+                        Not assigned
+                    </strong>
+
+                </div>
+
             </div>
-            <dl class="dp-details" id="dp-details"></dl>
-            <div class="dp-mfoot"><button class="dp-btn dp-ghost" type="button" data-dp-close>Close</button></div>
-        </dialog>
-    @endif
-
-        <style @if ($nonce) nonce="{{ $nonce }}" @endif>
-            .dp,
-            .dp-modal {
-                --g: var(--green, #15803d);
-                --g-d: var(--green-dark, #166534);
-                --g-l: var(--green-bg, #f0fdf4);
-                --g-b: var(--green-border, #dcfce7);
-                --ink: #171717;
-                --mut: #737373;
-                --line: var(--border, #e8e8e8);
-                --soft: #fafafa;
-            }
 
-            .dp {
-                max-width: 1280px;
-                margin: 0 auto;
-                padding: 8px 4px 40px;
-                color: var(--ink);
-                font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-                -webkit-font-smoothing: antialiased;
-            }
+        </div>
 
-            .dp *,
-            .dp-modal *,
-            .dp *::before {
-                box-sizing: border-box;
-            }
+        <div class="dept-modal-foot">
 
-            .dp svg,
-            .dp-modal svg,
-            .dp-ico {
-                fill: none;
-                stroke: currentColor;
-                stroke-width: 1.9;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-            }
+            <button type="button"
+                    class="dept-btn dept-btn-light"
+                    onclick="closeViewModal()">
+                Close
+            </button>
 
-            .dp-sr {
-                position: absolute;
-                width: 1px;
-                height: 1px;
-                overflow: hidden;
-                clip: rect(0 0 0 0);
-            }
+        </div>
 
-            .dp-in {
-                opacity: 0;
-                transform: translateY(14px);
-                animation: dp-rise .6s cubic-bezier(.22, 1, .36, 1) forwards;
-                animation-delay: calc(var(--i) * 80ms);
-            }
+    </div>
+</div>
 
-            @keyframes dp-rise {
-                to {
-                    opacity: 1;
-                    transform: none;
-                }
-            }
 
-            /* Heading + buttons */
-            .dp-head {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: flex-end;
-                justify-content: space-between;
-                gap: 18px;
-                margin-bottom: 22px;
-            }
+<script>
+(function () {
 
-            .dp-eyebrow {
-                margin: 0 0 6px;
-                color: var(--g);
-                font-size: 13px;
-                font-weight: 700;
-            }
+    var modal = document.getElementById('department-modal');
+    var viewModal = document.getElementById('view-department-modal');
+    var form = document.getElementById('department-form');
 
-            .dp-head h1 {
-                margin: 0;
-                font-size: clamp(28px, 4vw, 40px);
-                line-height: 1.05;
-                font-weight: 800;
-                letter-spacing: -.03em;
-            }
+    var currentId = null;
 
-            .dp-sub {
-                margin: 8px 0 0;
-                color: var(--mut);
-                font-size: 15px;
-            }
+    var createUrl = "{{ route('portal.data.departments.store') }}";
+    var showUrl = "{{ route('portal.data.departments.show', '__department__') }}";
+    var updateUrl = "{{ route('portal.data.departments.update', '__department__') }}";
+    var statusUrl = "{{ route('portal.data.departments.status', '__department__') }}";
 
-            .dp-btn {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                min-height: 42px;
-                padding: 0 18px;
-                border-radius: 10px;
-                border: 1px solid transparent;
-                font: 700 14px/1 inherit;
-                font-family: inherit;
-                cursor: pointer;
-                text-decoration: none;
-                transition: transform .15s, background .15s, box-shadow .15s;
-            }
+    var csrf = "{{ csrf_token() }}";
 
-            .dp-btn svg {
-                width: 17px;
-                height: 17px;
-            }
 
-            .dp-btn:active:not(:disabled) {
-                transform: scale(.97);
-            }
+    /* =========================
+       ADD DEPARTMENT
+    ========================= */
 
-            .dp-btn:disabled {
-                opacity: .5;
-                cursor: not-allowed;
-            }
+    window.openDepartmentModal = function () {
 
-            .dp-solid {
-                color: #fff;
-                background: var(--g);
-                box-shadow: 0 6px 16px rgba(21, 128, 61, .22);
-            }
+        currentId = null;
 
-            .dp-solid:hover:not(:disabled) {
-                background: var(--g-d);
-            }
+        form.reset();
+        clearErrors();
+        clearEmployee();
 
-            .dp-ghost {
-                color: var(--ink);
-                background: #fff;
-                border-color: var(--line);
-            }
+        document.getElementById('department-modal-title').innerText =
+            'Add Department';
 
-            .dp-ghost:hover:not(:disabled) {
-                background: var(--soft);
-            }
+        document.getElementById('department-save').innerText =
+            'Save Department';
 
-            .dp-sm {
-                min-height: 36px;
-                padding: 0 14px;
-                font-size: 13px;
-            }
+        modal.classList.add('show');
+    };
 
-            .dp a:focus-visible,
-            .dp button:focus-visible,
-            .dp input:focus-visible,
-            .dp-modal :focus-visible {
-                outline: 2px solid #22c55e;
-                outline-offset: 2px;
-            }
 
-            .dp-card {
-                background: #fff;
-                border: 1px solid var(--line);
-                border-radius: 14px;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
-            }
+    window.closeDepartmentModal = function () {
 
-            .dp-notice {
-                margin-bottom: 16px;
-                padding: 12px 16px;
-                border-radius: 11px;
-                font-size: 14px;
-                font-weight: 600;
-                animation: dp-rise .35s both;
-            }
+        modal.classList.remove('show');
+        clearEmployee();
+        clearErrors();
+    };
 
-            .dp-notice.ok {
-                color: var(--g-d);
-                background: var(--g-l);
-                border: 1px solid var(--g-b);
-            }
 
-            .dp-notice.bad {
-                color: #991b1b;
-                background: #fef2f2;
-                border: 1px solid #fecaca;
-            }
+    /* =========================
+       EMPLOYEE SEARCH
+    ========================= */
 
-            /* Overview: segmented switch and active share graph */
-            .dp-overview {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: space-between;
-                gap: 20px;
-                margin-bottom: 16px;
-                padding: 16px 20px;
-            }
+    var employeeSearch =
+        document.getElementById('employee-search');
 
-            .dp-switch {
-                display: inline-flex;
-                padding: 4px;
-                border-radius: 12px;
-                background: #f3f4f3;
-            }
+    var employeeResults =
+        document.getElementById('employee-results');
 
-            .dp-switch a {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 9px 16px;
-                border-radius: 9px;
-                color: var(--mut);
-                font-size: 14px;
-                font-weight: 700;
-                text-decoration: none;
-                transition: background .2s, color .2s, box-shadow .2s;
-            }
+    var employeeSelected =
+        document.getElementById('employee-selected');
 
-            .dp-switch a:hover {
-                color: var(--ink);
-            }
+    var employeeButtons =
+        document.querySelectorAll('.employee-result');
 
-            .dp-switch a.is-on {
-                color: var(--g-d);
-                background: #fff;
-                box-shadow: 0 2px 8px rgba(15, 23, 42, .1);
-            }
 
-            .dp-switch b {
-                min-width: 24px;
-                padding: 2px 8px;
-                border-radius: 999px;
-                color: var(--mut);
-                background: #e8ebe9;
-                font-size: 12px;
-                text-align: center;
-                font-variant-numeric: tabular-nums;
-            }
+    employeeSearch.addEventListener('focus', function () {
 
-            .dp-switch .is-on b {
-                color: #fff;
-                background: var(--g);
-            }
+        employeeResults.classList.add('show');
 
-            .dp-ratio {
-                flex: 1;
-                min-width: 220px;
-                max-width: 420px;
-            }
+        filterEmployees(this.value);
+    });
 
-            .dp-ratio-top {
-                display: flex;
-                justify-content: space-between;
-                gap: 10px;
-                font-size: 13px;
-                color: var(--mut);
-            }
 
-            .dp-ratio-top strong {
-                color: var(--ink);
-                font-size: 15px;
-                font-weight: 800;
-            }
+    employeeSearch.addEventListener('input', function () {
 
-            .dp-rail {
-                height: 10px;
-                margin-top: 8px;
-                overflow: hidden;
-                border-radius: 999px;
-                background: #eceeed;
-            }
+        filterEmployees(this.value);
+        employeeResults.classList.add('show');
+    });
 
-            .dp-rail i {
-                display: block;
-                width: var(--w);
-                height: 100%;
-                border-radius: inherit;
-                background: linear-gradient(90deg, #22c55e, #15803d);
-                transform-origin: left;
-                transition: width .6s cubic-bezier(.22, 1, .36, 1);
-                animation: dp-grow 1s cubic-bezier(.22, 1, .36, 1) .4s both;
-            }
 
-            @keyframes dp-grow {
-                from {
-                    transform: scaleX(0);
-                }
-            }
+    function filterEmployees(value) {
 
-            /* List panel */
-            .dp-ph {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: space-between;
-                gap: 14px;
-                padding: 20px 22px 16px;
-            }
+        var search = value.toLowerCase().trim();
+        var found = 0;
 
-            .dp-ph h2 {
-                margin: 0;
-                font-size: 19px;
-                font-weight: 800;
-                letter-spacing: -.02em;
-            }
+        for (var i = 0; i < employeeButtons.length; i++) {
 
-            .dp-ph p {
-                margin: 4px 0 0;
-                color: var(--mut);
-                font-size: 13px;
-            }
+            var button = employeeButtons[i];
 
-            .dp-search {
-                position: relative;
-                display: block;
-                width: min(320px, 100%);
-            }
+            var text =
+                button.getAttribute('data-search') || '';
 
-            .dp-search svg {
-                position: absolute;
-                left: 13px;
-                top: 50%;
-                width: 17px;
-                height: 17px;
-                margin-top: -8.5px;
-                color: #a3a3a3;
-                pointer-events: none;
-            }
+            var match =
+                !search || text.indexOf(search) !== -1;
 
-            .dp-search input,
-            .dp-grid input {
-                width: 100%;
-                min-height: 42px;
-                border: 1px solid var(--line);
-                border-radius: 10px;
-                color: var(--ink);
-                background: #fff;
-                font: 500 14px inherit;
-                font-family: inherit;
-                transition: border-color .15s, box-shadow .15s;
-            }
+            button.style.display = match ? 'flex' : 'none';
 
-            .dp-search input {
-                padding: 0 14px 0 40px;
+            if (match) {
+                found++;
             }
+        }
 
-            .dp-search input:focus,
-            .dp-grid input:focus {
-                border-color: #22c55e;
-                box-shadow: 0 0 0 4px rgba(34, 197, 94, .14);
-                outline: none;
-            }
+        if (!found) {
 
-            .dp-scroll {
-                overflow-x: auto;
-            }
+            employeeResults.innerHTML =
+                '<div class="employee-no-result">' +
+                'No employee found' +
+                '</div>';
 
-            .dp table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 13.5px;
-            }
+        } else if (
+            employeeResults.querySelector('.employee-no-result')
+        ) {
 
-            .dp th {
-                padding: 11px 16px;
-                border-block: 1px solid var(--line);
-                color: var(--mut);
-                background: var(--soft);
-                font-size: 12.5px;
-                font-weight: 700;
-                text-align: left;
-                white-space: nowrap;
-            }
+            employeeResults.innerHTML = '';
 
-            .dp td {
-                padding: 13px 16px;
-                border-bottom: 1px solid #f0f0f0;
-                vertical-align: middle;
+            for (var j = 0; j < employeeButtons.length; j++) {
+                employeeResults.appendChild(employeeButtons[j]);
             }
+        }
+    }
 
-            .dp tbody tr {
-                transition: background .15s;
-            }
 
-            .dp tbody tr:hover {
-                background: #fafcfa;
-            }
+    for (var i = 0; i < employeeButtons.length; i++) {
 
-            .dp tbody.is-loading {
-                opacity: .45;
-                pointer-events: none;
-                transition: opacity .15s;
-            }
+        employeeButtons[i].addEventListener('click', function () {
 
-            .dp-empty {
-                padding: 44px 16px !important;
-                color: var(--mut);
-                text-align: center;
-            }
+            selectEmployee(
+                this.getAttribute('data-id'),
+                this.getAttribute('data-name'),
+                this.getAttribute('data-code')
+            );
 
-            .dp-code {
-                padding: 4px 9px;
-                border-radius: 7px;
-                color: var(--g-d);
-                background: var(--g-l);
-                border: 1px solid var(--g-b);
-                font: 700 12px ui-monospace, SFMono-Regular, Menlo, monospace;
-            }
+        });
+    }
 
-            .dp-name {
-                display: flex;
-                align-items: center;
-                gap: 11px;
-                min-width: 150px;
-            }
 
-            .dp-name strong {
-                font-weight: 700;
-            }
+    function selectEmployee(id, name, code) {
 
-            .dp-av {
-                display: grid;
-                place-items: center;
-                flex: none;
-                width: 34px;
-                height: 34px;
-                border-radius: 10px;
-                font-size: 13px;
-                font-weight: 800;
-            }
+        document.getElementById('department-head').value = id;
 
-            .dp-a0 {
-                color: #2563eb;
-                background: #eff6ff;
-            }
+        document.getElementById('selected-employee-name').innerText =
+            name;
 
-            .dp-a1 {
-                color: #7c3aed;
-                background: #f5f3ff;
-            }
+        document.getElementById('selected-employee-code').innerText =
+            code;
 
-            .dp-a2 {
-                color: #ea580c;
-                background: #fff7ed;
-            }
+        employeeSelected.classList.add('show');
 
-            .dp-a3 {
-                color: #15803d;
-                background: #f0fdf4;
-            }
+        employeeSearch.value = name;
 
-            .dp-a4 {
-                color: #0891b2;
-                background: #ecfeff;
-            }
+        employeeResults.classList.remove('show');
+    }
 
-            .dp-a5 {
-                color: #4f46e5;
-                background: #eef2ff;
-            }
 
-            .dp-status {
-                display: inline-flex;
-                align-items: center;
-                gap: 7px;
-                padding: 4px 11px;
-                border-radius: 999px;
-                color: #737373;
-                background: #f3f4f3;
-                font-size: 12px;
-                font-weight: 700;
-            }
+    window.clearEmployee = function () {
 
-            .dp-status i {
-                width: 7px;
-                height: 7px;
-                border-radius: 50%;
-                background: #a3a3a3;
-            }
+        document.getElementById('department-head').value = '';
 
-            .dp-status.is-active {
-                color: var(--g-d);
-                background: var(--g-l);
-            }
+        document.getElementById('selected-employee-name').innerText = '';
+        document.getElementById('selected-employee-code').innerText = '';
 
-            .dp-status.is-active i {
-                background: #22c55e;
-                box-shadow: 0 0 0 3px rgba(34, 197, 94, .18);
-            }
+        employeeSelected.classList.remove('show');
 
-            .dp-actions {
-                white-space: nowrap;
-                text-align: right;
-            }
+        employeeSearch.value = '';
 
-            .dp-act {
-                display: inline-grid;
-                place-items: center;
-                width: 34px;
-                height: 34px;
-                padding: 0;
-                border: 1px solid var(--line);
-                border-radius: 9px;
-                color: #525252;
-                background: #fff;
-                cursor: pointer;
-                transition: color .15s, background .15s, border-color .15s, transform .15s;
-            }
+        employeeResults.classList.remove('show');
+    };
 
-            .dp-act+.dp-act {
-                margin-left: 6px;
-            }
 
-            .dp-ico {
-                width: 17px;
-                height: 17px;
-                pointer-events: none;
-            }
+    document.addEventListener('click', function (event) {
 
-            .dp-act:active:not(:disabled) {
-                transform: scale(.92);
-            }
+        var picker = document.querySelector('.employee-picker');
 
-            .dp-act.is-view:hover {
-                color: #2563eb;
-                background: #eff6ff;
-                border-color: #bfdbfe;
-            }
+        if (picker && !picker.contains(event.target)) {
+            employeeResults.classList.remove('show');
+        }
+    });
 
-            .dp-act.is-edit:hover,
-            .dp-act.is-on:hover {
-                color: var(--g-d);
-                background: var(--g-l);
-                border-color: var(--g-b);
-            }
 
-            .dp-act.is-off:hover {
-                color: #b91c1c;
-                background: #fef2f2;
-                border-color: #fecaca;
-            }
+    /* =========================
+       EDIT
+    ========================= */
 
-            .dp-act:disabled {
-                opacity: .45;
-                cursor: wait;
-            }
+    window.editDepartment = function (id) {
 
-            .dp-foot {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: space-between;
-                gap: 12px;
-                padding: 14px 22px;
-                color: var(--mut);
-                font-size: 13px;
-            }
+        currentId = id;
 
-            .dp-pager {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
+        clearErrors();
 
-            /* Modals (native dialog: focus trap and Escape come built in) */
-            .dp-modal {
-                width: min(640px, calc(100vw - 24px));
-                max-height: calc(100dvh - 24px);
-                padding: 24px;
-                overflow-y: auto;
-                border: 1px solid var(--line);
-                border-radius: 18px;
-                color: #171717;
-                background: #fff;
-                box-shadow: 0 30px 80px rgba(15, 23, 42, .28);
-                font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        fetch(showUrl.replace('__department__', id), {
+            headers: {
+                'Accept': 'application/json'
             }
+        })
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (result) {
 
-            .dp-modal[open] {
-                animation: dp-pop .28s cubic-bezier(.22, 1, .36, 1);
-            }
+            var d = result.data;
+            var head = d.head_employee;
 
-            .dp-modal::backdrop {
-                background: rgba(15, 23, 42, .42);
-                backdrop-filter: blur(3px);
-            }
+            document.getElementById('department-code').value =
+                d.code || '';
 
-            @keyframes dp-pop {
-                from {
-                    opacity: 0;
-                    transform: translateY(14px) scale(.97);
-                }
-            }
+            document.getElementById('department-name').value =
+                d.name || '';
 
-            .dp-mhead {
-                display: flex;
-                justify-content: space-between;
-                gap: 16px;
-                margin-bottom: 20px;
-            }
+            document.getElementById('department-location').value =
+                d.location || '';
 
-            .dp-mhead h2 {
-                margin: 0;
-                font-size: 22px;
-                font-weight: 800;
-                letter-spacing: -.02em;
-            }
+            document.getElementById('department-email').value =
+                d.email || '';
 
-            .dp-mhead p {
-                margin: 4px 0 0;
-                color: var(--mut);
-                font-size: 13.5px;
-            }
+            document.getElementById('department-contact').value =
+                d.contact_no || '';
 
-            .dp-mhead .dp-eyebrow {
-                margin: 0 0 4px;
-                color: var(--g);
-                font-size: 13px;
-            }
+            clearEmployee();
 
-            .dp-x {
-                width: 34px;
-                height: 34px;
-                flex: none;
-                border: 1px solid var(--line);
-                border-radius: 9px;
-                color: #525252;
-                background: #fff;
-                font-size: 20px;
-                line-height: 1;
-                cursor: pointer;
-            }
+            if (head) {
 
-            .dp-x:hover {
-                color: var(--g);
-                background: var(--g-l);
-            }
+                var name =
+                    (head.first_name || '') + ' ' +
+                    (head.last_name || '');
 
-            .dp-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 14px;
+                selectEmployee(
+                    head.id,
+                    name.trim(),
+                    head.employee_code || ''
+                );
             }
 
-            .dp-grid label {
-                display: grid;
-                gap: 6px;
-                color: #404040;
-                font-size: 13px;
-                font-weight: 700;
-            }
+            document.getElementById('department-modal-title').innerText =
+                'Edit Department';
 
-            .dp-grid input {
-                padding: 0 13px;
-            }
+            document.getElementById('department-save').innerText =
+                'Update Department';
 
-            .dp-grid input::placeholder {
-                color: #a3a3a3;
-                font-weight: 500;
-            }
+            modal.classList.add('show');
+        })
+        .catch(function () {
+            showAlert('Unable to load department.', 'error');
+        });
+    };
 
-            .dp-grid input[aria-invalid="true"] {
-                border-color: #ef4444;
-                box-shadow: 0 0 0 4px rgba(239, 68, 68, .12);
-            }
 
-            .dp-fe {
-                color: #b91c1c;
-                font-size: 12px;
-                font-weight: 600;
-                line-height: 1.3;
-            }
+    /* =========================
+       VIEW POPUP
+    ========================= */
 
-            .dp-fe:empty {
-                display: none;
-            }
+    window.viewDepartment = function (id) {
 
-            .dp-error {
-                margin-top: 14px;
-                padding: 11px 14px;
-                border-radius: 10px;
-                color: #991b1b;
-                background: #fef2f2;
-                border: 1px solid #fecaca;
-                font-size: 13.5px;
-                font-weight: 600;
+        fetch(showUrl.replace('__department__', id), {
+            headers: {
+                'Accept': 'application/json'
             }
+        })
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (result) {
 
-            .dp-mfoot {
-                display: flex;
-                justify-content: flex-end;
-                gap: 10px;
-                margin-top: 22px;
-            }
+            var d = result.data;
+            var head = d.head_employee;
 
-            .dp-details {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-                margin: 0;
-            }
+            var name = d.name || 'Department';
+            var code = d.code || '-';
 
-            .dp-details div {
-                padding: 12px 14px;
-                border: 1px solid var(--line);
-                border-radius: 11px;
-                background: var(--soft);
-            }
+            document.getElementById('view-name').innerText =
+                name;
 
-            .dp-details dt {
-                color: var(--mut);
-                font-size: 12px;
-                font-weight: 600;
-            }
+            document.getElementById('view-code').innerText =
+                code;
 
-            .dp-details dd {
-                margin: 3px 0 0;
-                font-size: 14.5px;
-                font-weight: 700;
-                overflow-wrap: anywhere;
-            }
+            document.getElementById('view-location').innerText =
+                d.location || '-';
 
-            @media (max-width: 1180px) {
-                .dp-lg {
-                    display: none;
-                }
-            }
+            document.getElementById('view-contact').innerText =
+                d.contact_no || '-';
 
-            @media (max-width: 860px) {
-                .dp-md {
-                    display: none;
-                }
-            }
+            document.getElementById('view-email').innerText =
+                d.email || '-';
 
-            @media (max-width: 560px) {
-
-                .dp-grid,
-                .dp-details {
-                    grid-template-columns: 1fr;
-                }
-
-                .dp-head .dp-btn {
-                    width: 100%;
-                    justify-content: center;
-                }
-
-                .dp-ph,
-                .dp-foot {
-                    padding-inline: 16px;
-                }
-            }
+            document.getElementById('view-head').innerText =
+                head
+                    ? (head.first_name + ' ' + head.last_name +
+                       (head.employee_code
+                           ? ' · ' + head.employee_code
+                           : ''))
+                    : 'Not assigned';
+
+            var initials = '--';
 
-            @media (prefers-reduced-motion: reduce) {
-
-                .dp *,
-                .dp-modal,
-                .dp-in {
-                    animation: none !important;
-                    transition: none !important;
-                    opacity: 1;
-                    transform: none;
-                }
+            if (head) {
+                initials = (
+                    (head.first_name || '').charAt(0) +
+                    (head.last_name || '').charAt(0)
+                ).toUpperCase();
             }
-        </style>
-    @push('scripts')
-        <script @if ($nonce) nonce="{{ $nonce }}" @endif>
-            (function() {
-                'use strict';
-                var $ = function(s, r) {
-                    return (r || document).querySelector(s);
+
+            document.getElementById('view-initials').innerText =
+                initials;
+
+            var status =
+                document.getElementById('view-status');
+
+            status.className =
+                'view-status' +
+                (d.is_active ? '' : ' off');
+
+            status.innerHTML =
+                '<i></i>' +
+                (d.is_active ? 'Active' : 'Inactive');
+
+            viewModal.classList.add('show');
+        })
+        .catch(function () {
+            showAlert('Unable to load department.', 'error');
+        });
+    };
+
+
+    window.closeViewModal = function () {
+        viewModal.classList.remove('show');
+    };
+
+
+    /* =========================
+       STATUS
+    ========================= */
+
+    window.toggleDepartment = function (id, status) {
+
+        var message = status
+            ? 'Activate this department?'
+            : 'Deactivate this department?';
+
+        if (!confirm(message)) {
+            return;
+        }
+
+        fetch(statusUrl.replace('__department__', id), {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf
+            },
+            body: JSON.stringify({
+                is_active: status
+            })
+        })
+        .then(function (response) {
+            return response.json();
+        })
+        .then(function (result) {
+
+            showAlert(
+                result.message ||
+                'Department status updated.',
+                'success'
+            );
+
+            setTimeout(function () {
+                window.location.reload();
+            }, 600);
+        })
+        .catch(function () {
+            showAlert(
+                'Unable to update department status.',
+                'error'
+            );
+        });
+    };
+
+
+    /* =========================
+       SAVE
+    ========================= */
+
+    form.addEventListener('submit', function (event) {
+
+        event.preventDefault();
+
+        clearErrors();
+
+        var data = {
+            code:
+                document.getElementById('department-code').value.trim(),
+
+            name:
+                document.getElementById('department-name').value.trim(),
+
+            location:
+                document.getElementById('department-location').value.trim(),
+
+            email:
+                document.getElementById('department-email').value.trim(),
+
+            contact_no:
+                document.getElementById('department-contact').value.trim(),
+
+            head_employee_id:
+                document.getElementById('department-head').value
+        };
+
+        var url = currentId
+            ? updateUrl.replace('__department__', currentId)
+            : createUrl;
+
+        var method = currentId ? 'PUT' : 'POST';
+
+        var button =
+            document.getElementById('department-save');
+
+        button.disabled = true;
+        button.innerText = 'Saving...';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrf
+            },
+            body: JSON.stringify(data)
+        })
+        .then(function (response) {
+
+            return response.json().then(function (json) {
+                return {
+                    status: response.status,
+                    data: json
                 };
-                var panel = $('#dp-panel'),
-                    rows = $('#dp-rows'),
-                    form = $('#dp-form'),
-                    formDlg = $('#dp-modal'),
-                    viewDlg = $('#dp-view-modal'),
-                    search = $('#dp-search'),
-                    box = $('#dp-alert');
-                var page = 1,
-                    perPage = 10,
-                    timer, noticeTimer, ctrl;
-                var meta = $('meta[name="csrf-token"]'),
-                    tok = form && form.querySelector('[name="_token"]');
-                var csrf = meta ? meta.content : (tok ? tok.value : '');
+            });
+        })
+        .then(function (result) {
 
-                function h(tag, cls, text) {
-                    var e = document.createElement(tag);
-                    if (cls) e.className = cls;
-                    if (text != null) e.textContent = text;
-                    return e;
+            button.disabled = false;
+
+            button.innerText =
+                currentId
+                    ? 'Update Department'
+                    : 'Save Department';
+
+            if (result.status >= 400) {
+
+                if (result.data.errors) {
+                    showValidationErrors(
+                        result.data.errors
+                    );
+                } else {
+                    showFormError(
+                        result.data.message ||
+                        'Unable to save department.'
+                    );
                 }
 
-                function request(url, o) {
-                    o = o || {};
-                    return fetch(url, {
-                        method: o.method || 'GET',
-                        credentials: 'same-origin',
-                        signal: o.signal,
-                        headers: {
-                            Accept: 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrf,
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: o.body ? JSON.stringify(o.body) : undefined
-                    }).then(function(r) {
-                        return r.json().catch(function() {
-                            return {};
-                        }).then(function(p) {
-                            if (!r.ok) {
-                                var k = p.errors ? Object.keys(p.errors) : [];
-                                var e = new Error(k.length ? p.errors[k[0]][0] : p.message ||
-                                    'The request failed.');
-                                e.fields = p.errors || null;
-                                throw e;
-                            }
-                            return p;
-                        });
-                    });
-                }
+                return;
+            }
 
-                function notify(msg, bad) {
-                    box.textContent = msg;
-                    box.className = 'dp-notice ' + (bad ? 'bad' : 'ok');
-                    box.hidden = false;
-                    clearTimeout(noticeTimer);
-                    noticeTimer = setTimeout(function() {
-                        box.hidden = true;
-                    }, 7000);
-                }
+            closeDepartmentModal();
 
-                function open(d) {
-                    if (d && d.showModal) d.showModal();
-                    else if (d) d.setAttribute('open', '');
-                }
+            showAlert(
+                result.data.message ||
+                'Department saved successfully.',
+                'success'
+            );
 
-                function close(d) {
-                    if (d && d.close) d.close();
-                    else if (d) d.removeAttribute('open');
-                }
+            setTimeout(function () {
+                window.location.reload();
+            }, 600);
+        })
+        .catch(function () {
 
-                function tpl(t, id) {
-                    return t.replace('__department__', encodeURIComponent(id));
-                }
+            button.disabled = false;
 
-                function counters(delta) {
-                    var a = $('[data-active-count]'),
-                        i = $('[data-inactive-count]');
-                    if (delta) {
-                        var from = delta > 0 ? i : a,
-                            to = delta > 0 ? a : i;
-                        from.textContent = Math.max(0, (+from.textContent || 0) - 1);
-                        to.textContent = (+to.textContent || 0) + 1;
-                    }
-                    var x = +a.textContent || 0,
-                        t = x + (+i.textContent || 0),
-                        s = t ? Math.round(x / t * 100) : 0;
-                    $('#dp-ratio').style.setProperty('--w', s + '%');
-                    $('[data-share]').textContent = s;
-                }
+            button.innerText =
+                currentId
+                    ? 'Update Department'
+                    : 'Save Department';
 
-                var NS = 'http://www.w3.org/2000/svg',
-                    XL = 'http://www.w3.org/1999/xlink';
+            showFormError(
+                'Something went wrong. Please try again.'
+            );
+        });
+    });
 
-                function icon(name) {
-                    var svg = document.createElementNS(NS, 'svg'),
-                        use = document.createElementNS(NS, 'use');
-                    svg.setAttribute('class', 'dp-ico');
-                    svg.setAttribute('aria-hidden', 'true');
-                    use.setAttribute('href', '#dp-i-' + name);
-                    use.setAttributeNS(XL, 'xlink:href', '#dp-i-' + name);
-                    svg.appendChild(use);
-                    return svg;
-                }
 
-                function iconButton(kind, label, who, cls, attr, value) {
-                    var b = h('button', 'dp-act ' + cls);
-                    b.type = 'button';
-                    b.title = label;
-                    b.setAttribute('aria-label', label + ' ' + who);
-                    b.setAttribute(attr, value);
-                    b.appendChild(icon(kind));
-                    return b;
-                }
+    /* =========================
+       TABLE SEARCH
+    ========================= */
 
-                function cell(row, text, cls) {
-                    var td = h('td', cls, text);
-                    row.appendChild(td);
-                    return td;
-                }
+    document.getElementById('department-search')
+        .addEventListener('input', function () {
 
-                function render(payload) {
-                    var list = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.data) ? payload.data :
-                        (payload && payload.data && Array.isArray(payload.data.data) ? payload.data.data : null));
-                    var m = payload && payload.meta ? payload.meta : (payload && payload.data && payload.data.meta ? payload
-                        .data.meta : payload);
-                    if (!list || !m || typeof m.current_page !== 'number' || typeof m.last_page !== 'number' || typeof m
-                        .total !== 'number') {
-                        throw new Error('The department list response was invalid. Please refresh and try again.');
-                    }
-                    perPage = m.per_page || perPage;
-                    rows.textContent = '';
-                    list.forEach(function(d) {
-                        var tr = h('tr');
-                        cell(tr, null).appendChild(h('span', 'dp-code', d.code));
-                        var name = h('div', 'dp-name');
-                        name.appendChild(h('span', 'dp-av dp-a' + (Number(d.id) % 6), String(d.name || '?').charAt(
-                            0).toUpperCase()));
-                        name.appendChild(h('strong', null, d.name));
-                        cell(tr, null).appendChild(name);
-                        cell(tr, d.location, 'dp-md');
-                        cell(tr, d.email, 'dp-lg');
-                        cell(tr, d.contact_no, 'dp-lg');
-                        cell(tr, d.head, 'dp-md');
-                        var st = h('span', 'dp-status' + (d.is_active ? ' is-active' : ''));
-                        st.appendChild(h('i'));
-                        st.appendChild(document.createTextNode(d.is_active ? 'Active' : 'Inactive'));
-                        cell(tr, null).appendChild(st);
-                        var act = cell(tr, null, 'dp-actions');
-                        if (panel.dataset.canView === '1' && viewDlg) act.appendChild(iconButton('view', 'View', d
-                            .name, 'is-view', 'data-dp-view', d.id));
-                        if (panel.dataset.canEdit === '1' && form) act.appendChild(iconButton('edit', 'Edit', d
-                            .name, 'is-edit', 'data-dp-edit', d.id));
-                        if (panel.dataset.canDelete === '1') {
-                            var t = iconButton(d.is_active ? 'off' : 'on', d.is_active ? 'Deactivate' : 'Activate',
-                                d.name, d.is_active ? 'is-off' : 'is-on', 'data-dp-status', d.id);
-                            t.setAttribute('data-next-status', d.is_active ? '0' : '1');
-                            act.appendChild(t);
-                        }
-                        rows.appendChild(tr);
-                    });
-                    if (!list.length) {
-                        var tr = h('tr'),
-                            td = h('td', 'dp-empty', 'No departments found.');
-                        td.colSpan = 8;
-                        tr.appendChild(td);
-                        rows.appendChild(tr);
-                    }
-                    var from = m.total ? (m.from || (m.current_page - 1) * perPage + 1) : 0;
-                    var to = m.total ? (m.to || Math.min(m.current_page * perPage, m.total)) : 0;
-                    $('[data-dp-total]').textContent = Number(m.total).toLocaleString('en-IN');
-                    $('[data-dp-summary]').textContent = 'Showing ' + from + '–' + to + ' of ' + Number(m.total)
-                        .toLocaleString('en-IN') + ' departments';
-                    $('[data-dp-page]').textContent = 'Page ' + m.current_page + ' of ' + Math.max(1, m.last_page);
-                    $('[data-dp-prev]').disabled = m.current_page <= 1;
-                    $('[data-dp-next]').disabled = m.current_page >= m.last_page;
-                    page = m.current_page;
-                }
+            var search =
+                this.value.toLowerCase().trim();
 
-                function load(target) {
-                    if (ctrl && ctrl.abort) ctrl.abort();
-                    ctrl = window.AbortController ? new AbortController() : null;
-                    var url = new URL(panel.dataset.listUrl, window.location.origin);
-                    url.searchParams.set('page', target || 1);
-                    url.searchParams.set('search', search.value);
-                    url.searchParams.set('status', panel.dataset.status);
-                    rows.classList.add('is-loading');
-                    return request(url.toString(), {
-                            signal: ctrl ? ctrl.signal : undefined
-                        }).then(render)
-                        .catch(function(err) {
-                            if (err.name !== 'AbortError') notify(err.message, true);
-                        })
-                        .then(function() {
-                            rows.classList.remove('is-loading');
-                        });
-                }
+            var rows =
+                document.querySelectorAll(
+                    '[data-department-row]'
+                );
 
-                search.addEventListener('input', function() {
-                    clearTimeout(timer);
-                    timer = setTimeout(function() {
-                        load(1);
-                    }, 280);
-                });
-                $('[data-dp-prev]').addEventListener('click', function() {
-                    load(Math.max(1, page - 1));
-                });
-                $('[data-dp-next]').addEventListener('click', function() {
-                    load(page + 1);
-                });
+            for (var i = 0; i < rows.length; i++) {
 
-                var create = $('[data-dp-create]');
-                if (create && form) create.addEventListener('click', function() {
-                    form.reset();
-                    delete form.dataset.departmentId;
-                    clearErrors();
-                    $('#dp-modal-title').textContent = 'Add department';
-                    form.querySelector('[type="submit"]').textContent = 'Save department';
-                    open(formDlg);
-                });
+                var text =
+                    rows[i].getAttribute('data-search') || '';
 
-                /* Field rules: same limits as the inputs; the server must enforce them again */
-                var rules = {
-                    code: {
-                        re: /^[A-Za-z0-9_-]{2,16}$/,
-                        msg: 'Use 2–16 letters, numbers, hyphen or underscore.',
-                        clean: function(v) {
-                            return v.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 16);
-                        }
-                    },
-                    name: {
-                        re: /^.{2,100}$/,
-                        msg: 'Enter the department name (2–100 characters).'
-                    },
-                    location: {
-                        re: /^.{2,100}$/,
-                        msg: 'Enter the department location (2–100 characters).'
-                    },
-                    email: {
-                        re: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,
-                        msg: 'Enter a valid email address, like name@company.com.'
-                    },
-                    contact_no: {
-                        re: /^[0-9]{10}$/,
-                        msg: 'Enter exactly 10 digits. Letters and symbols are not allowed.',
-                        clean: function(v) {
-                            return v.replace(/\D/g, '').slice(0, 10);
-                        }
-                    },
-                    head: {
-                        re: /^[^0-9]{2,120}$/,
-                        msg: 'Enter the head’s full name (2–120 characters, no numbers).'
-                    }
-                };
+                rows[i].style.display =
+                    !search ||
+                    text.indexOf(search) !== -1
+                        ? ''
+                        : 'none';
+            }
+        });
 
-                function setError(name, msg) {
-                    var input = form.elements[name],
-                        out = $('#dp-e-' + name);
-                    if (!input || !out) return;
-                    out.textContent = msg || '';
-                    if (msg) input.setAttribute('aria-invalid', 'true');
-                    else input.removeAttribute('aria-invalid');
-                }
 
-                function clearErrors() {
-                    Object.keys(rules).forEach(function(n) {
-                        setError(n, '');
-                    });
-                    form.querySelector('.dp-error').hidden = true;
-                }
+    /* =========================
+       HELPERS
+    ========================= */
 
-                function check(name) {
-                    var v = form.elements[name].value.trim();
-                    var msg = !v ? 'This field is required.' : (rules[name].re.test(v) ? '' : rules[name].msg);
-                    setError(name, msg);
-                    return !msg;
-                }
-                if (form) Object.keys(rules).forEach(function(name) {
-                    var input = form.elements[name];
-                    input.addEventListener('input', function() {
-                        if (rules[name].clean) {
-                            var c = rules[name].clean(input.value);
-                            if (c !== input.value) input.value = c;
-                        }
-                        if (input.getAttribute('aria-invalid')) check(name);
-                    });
-                    input.addEventListener('blur', function() {
-                        if (input.value) check(name);
-                    });
-                });
+    function clearErrors() {
 
-                if (form) form.addEventListener('submit', function(ev) {
-                    ev.preventDefault();
-                    var bad = Object.keys(rules).filter(function(n) {
-                        return !check(n);
-                    });
-                    if (bad.length) {
-                        form.elements[bad[0]].focus();
-                        return;
-                    }
-                    var data = {},
-                        id = form.dataset.departmentId,
-                        btn = form.querySelector('[type="submit"]'),
-                        label = btn.textContent;
-                    new FormData(form).forEach(function(v, k) {
-                        if (k !== '_token') data[k] = typeof v === 'string' ? v.trim() : v;
-                    });
-                    btn.disabled = true;
-                    btn.textContent = 'Saving…';
-                    request(id ? tpl(panel.dataset.updateUrl, id) : form.dataset.storeUrl, {
-                            method: id ? 'PUT' : 'POST',
-                            body: data
-                        })
-                        .then(function(p) {
-                            close(formDlg);
-                            notify(p.message || 'Saved.', false);
-                            if (!id) {
-                                var a = $('[data-active-count]');
-                                a.textContent = (+a.textContent || 0) + 1;
-                                counters(0);
-                            }
-                            return load(1);
-                        })
-                        .catch(function(err) {
-                            var mapped = [],
-                                b = form.querySelector('.dp-error');
-                            Object.keys(err.fields || {}).forEach(function(k) {
-                                if (rules[k]) {
-                                    setError(k, [].concat(err.fields[k])[0]);
-                                    mapped.push(k);
-                                }
-                            });
-                            if (mapped.length) {
-                                b.hidden = true;
-                                form.elements[mapped[0]].focus();
-                                return;
-                            }
-                            b.textContent = err.message;
-                            b.hidden = false;
-                        })
-                        .then(function() {
-                            btn.disabled = false;
-                            btn.textContent = label;
-                        });
-                });
+        var errors =
+            document.querySelectorAll('.dept-error');
 
-                rows.addEventListener('click', function(ev) {
-                    var vb = ev.target.closest('[data-dp-view]'),
-                        eb = ev.target.closest('[data-dp-edit]'),
-                        sb = ev.target.closest('[data-dp-status]');
-                    if (vb || eb) {
-                        request(tpl(panel.dataset.showUrl, (vb || eb).getAttribute(vb ? 'data-dp-view' :
-                            'data-dp-edit'))).then(function(p) {
-                            var d = p.data;
-                            if (vb) {
-                                var dl = $('#dp-details');
-                                dl.textContent = '';
-                                [
-                                    ['Code', d.code],
-                                    ['Name', d.name],
-                                    ['Location', d.location],
-                                    ['Email', d.email],
-                                    ['Contact number', d.contact_no],
-                                    ['Department head', d.head],
-                                    ['Status', d.is_active ? 'Active' : 'Inactive']
-                                ].forEach(function(it) {
-                                    var r = h('div');
-                                    r.appendChild(h('dt', null, it[0]));
-                                    r.appendChild(h('dd', null, it[1] || '—'));
-                                    dl.appendChild(r);
-                                });
-                                open(viewDlg);
-                                return;
-                            }
-                            form.reset();
-                            form.dataset.departmentId = d.id;
-                            clearErrors();
-                            Object.keys(d).forEach(function(k) {
-                                if (form.elements[k] && k !== '_token') form.elements[k].value = d[
-                                    k] == null ? '' : d[k];
-                            });
-                            $('#dp-modal-title').textContent = 'Edit department';
-                            form.querySelector('[type="submit"]').textContent = 'Save changes';
-                            open(formDlg);
-                        }).catch(function(err) {
-                            notify(err.message, true);
-                        });
-                    }
-                    if (sb) {
-                        var on = sb.dataset.nextStatus === '1',
-                            word = on ? 'Activate' : 'Deactivate';
-                        var ask = window.Swal ? window.Swal.fire({
-                            icon: 'warning',
-                            title: word + ' department?',
-                            showCancelButton: true,
-                            confirmButtonText: word,
-                            cancelButtonText: 'Cancel',
-                            text: on ? 'The department will be available for new employee records.' :
-                                'The department stays in the system but is unavailable for new employee records.',
-                            confirmButtonColor: on ? '#15803d' : '#b91c1c'
-                        }).then(function(r) {
-                            return r.isConfirmed;
-                        }) : Promise.resolve(window.confirm(word + ' this department?'));
-                        ask.then(function(ok) {
-                            if (!ok) return;
-                            sb.disabled = true;
-                            request(tpl(panel.dataset.statusUrl, sb.dataset.dpStatus), {
-                                    method: 'PATCH',
-                                    body: {
-                                        is_active: on ? 1 : 0
-                                    }
-                                })
-                                .then(function(p) {
-                                    counters(on ? 1 : -1);
-                                    notify(p.message || 'Updated.', false);
-                                    return load(page);
-                                })
-                                .catch(function(err) {
-                                    notify(err.message, true);
-                                })
-                                .then(function() {
-                                    sb.disabled = false;
-                                });
-                        });
-                    }
-                });
+        for (var i = 0; i < errors.length; i++) {
+            errors[i].innerText = '';
+        }
 
-                [formDlg, viewDlg].forEach(function(d) {
-                    if (!d) return;
-                    d.addEventListener('click', function(ev) {
-                        if (ev.target === d || ev.target.closest('[data-dp-close]')) close(d);
-                    });
-                });
-            })();
-        </script>
-    @endpush
+        document.getElementById('form-error')
+            .classList.remove('show');
+    }
+
+
+    function showValidationErrors(errors) {
+
+        for (var field in errors) {
+
+            if (!errors.hasOwnProperty(field)) {
+                continue;
+            }
+
+            var element =
+                document.getElementById('error-' + field);
+
+            if (element) {
+                element.innerText =
+                    errors[field][0];
+            }
+        }
+    }
+
+
+    function showFormError(message) {
+
+        var error =
+            document.getElementById('form-error');
+
+        error.innerText = message;
+        error.classList.add('show');
+    }
+
+
+    function showAlert(message, type) {
+
+        var alert =
+            document.getElementById('dept-alert');
+
+        alert.innerText = message;
+        alert.className =
+            'dept-alert show ' + type;
+
+        setTimeout(function () {
+            alert.classList.remove('show');
+        }, 3500);
+    }
+
+
+    /* CLOSE MODALS WITH BACKDROP */
+
+    modal.addEventListener('click', function (event) {
+
+        if (event.target === modal) {
+            closeDepartmentModal();
+        }
+    });
+
+    viewModal.addEventListener('click', function (event) {
+
+        if (event.target === viewModal) {
+            closeViewModal();
+        }
+    });
+
+})();
+</script>
+
 @endsection
