@@ -21,7 +21,7 @@ class CreateHolidaysTable extends Migration
         $now = now();
         $rolePermissions = [
             'hr' => ['can_view' => true, 'can_create' => true, 'can_edit' => true, 'can_delete' => true],
-            'employee' => ['can_view' => true, 'can_create' => false, 'can_edit' => false, 'can_delete' => false],
+            'emp' => ['can_view' => true, 'can_create' => false, 'can_edit' => false, 'can_delete' => false],
         ];
 
         foreach (DB::table('user_roles')->get(['id', 'name']) as $role) {

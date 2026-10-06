@@ -42,7 +42,7 @@ class CreateModuleAccessTable extends Migration
                 'employee_types' => ['view', 'create', 'edit', 'delete'],
                 'employee_roles' => ['view', 'create', 'edit', 'delete'],
             ],
-            'employee' => [
+            'emp' => [
                 'dashboard' => ['view'],
                 'employee_profile' => ['view'],
             ],

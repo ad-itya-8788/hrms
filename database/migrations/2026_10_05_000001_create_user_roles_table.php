@@ -16,7 +16,7 @@ class CreateUserRolesTable extends Migration
         });
 
         $now = date('Y-m-d H:i:s');
-        foreach (['admin', 'super_admin', 'hr', 'employee'] as $role) {
+        foreach (['superadmin', 'hr', 'emp'] as $role) {
             DB::table('user_roles')->insert([
                 'name' => $role,
                 'created_at' => $now,

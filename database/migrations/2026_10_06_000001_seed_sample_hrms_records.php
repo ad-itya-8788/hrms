@@ -65,9 +65,9 @@ class SeedSampleHrmsRecords extends Migration
                 );
             }
 
-            $employeeRoleId = DB::table('user_roles')->where('name', 'employee')->value('id');
+            $employeeRoleId = DB::table('user_roles')->where('name', 'emp')->value('id');
             if (!$employeeRoleId) {
-                throw new \RuntimeException('The employee user role is required before sample HRMS records can be seeded.');
+                throw new \RuntimeException('The emp user role is required before sample HRMS records can be seeded.');
             }
             $hrRoleId = DB::table('user_roles')->where('name', 'hr')->value('id');
             if (!$hrRoleId) {
@@ -88,9 +88,9 @@ class SeedSampleHrmsRecords extends Migration
                 ]
             );
             $creatorUserId = DB::table('users')->where('email', 'seed.hr@gmail.com')->value('id');
-            $superAdminRoleId = DB::table('user_roles')->where('name', 'super_admin')->value('id');
+            $superAdminRoleId = DB::table('user_roles')->where('name', 'superadmin')->value('id');
             if (!$superAdminRoleId) {
-                throw new \RuntimeException('The super_admin user role is required before sample HRMS records can be seeded.');
+                throw new \RuntimeException('The superadmin user role is required before sample HRMS records can be seeded.');
             }
             DB::table('users')->updateOrInsert(
                 ['email' => 'super@gmail.com'],

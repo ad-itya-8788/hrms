@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\SuperAdmin;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -22,7 +22,7 @@ class ModuleAccessController extends Controller
         ]);
         $selectedRole = $request->input('role', $roles->first()->name);
         $role = UserRole::where('name', $selectedRole)->withCount('users')->with('moduleAccess')->firstOrFail();
-        $isSystemRole = in_array($role->name, ['admin', 'super_admin'], true);
+        $isSystemRole = in_array($role->name, ['superadmin', 'super_admin', 'admin'], true);
         $canManageAccess = !$isSystemRole && $role->is_active;
         $modules = [];
 
@@ -65,7 +65,7 @@ class ModuleAccessController extends Controller
 
     public function update(Request $request)
     {
-        $roles = UserRole::whereNotIn('name', ['admin', 'super_admin'])
+        $roles = UserRole::whereNotIn('name', ['admin', 'super_admin', 'superadmin'])
             ->where('is_active', true)
             ->pluck('name')
             ->all();

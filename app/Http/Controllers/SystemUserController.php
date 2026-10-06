@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\SuperAdmin;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -104,10 +104,10 @@ class SystemUserController extends Controller
         $updated = DB::transaction(function () use ($user, $isActive) {
             $lockedUser = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $roleName = $lockedUser->userRole ? $lockedUser->userRole->name : null;
-            if (!$isActive && $lockedUser->is_active && in_array($roleName, ['admin', 'super_admin'], true)) {
+            if (!$isActive && $lockedUser->is_active && in_array($roleName, ['admin', 'super_admin', 'superadmin'], true)) {
                 $activeAdministrators = User::where('is_active', true)
                     ->whereHas('userRole', function ($query) {
-                        $query->whereIn('name', ['admin', 'super_admin']);
+                        $query->whereIn('name', ['admin', 'super_admin', 'superadmin']);
                     })
                     ->lockForUpdate()
                     ->count();

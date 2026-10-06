@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use App\Models\Department;
+use App\Models\Employee;
+
 class User extends Authenticatable
 {
     use Notifiable;
@@ -59,7 +62,67 @@ class User extends Authenticatable
 
     public function isSuperAdmin()
     {
-        return in_array($this->role, ['super_admin', 'admin'], true);
+        return in_array($this->role, ['superadmin', 'super_admin', 'admin'], true);
+    }
+
+    public function isEmployeeAccount()
+    {
+        return in_array($this->role, ['emp', 'employee'], true);
+    }
+
+    public function headedDepartmentIds()
+    {
+        if (!$this->employee_id) {
+            return collect();
+        }
+
+        return Department::where('head_employee_id', $this->employee_id)->pluck('id');
+    }
+
+    public function isDepartmentHead()
+    {
+        return $this->headedDepartmentIds()->isNotEmpty();
+    }
+
+    public function isDepartmentHeadOfEmployee(Employee $employee)
+    {
+        return $this->employee_id
+            && Department::where('id', $employee->department_id)
+                ->where('head_employee_id', $this->employee_id)
+                ->exists();
+    }
+
+    public function canViewEmployeeRecord(Employee $employee)
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->isDepartmentHead()) {
+            return $this->isDepartmentHeadOfEmployee($employee);
+        }
+
+        return $this->hasPermission('employees', 'view');
+    }
+
+    public function canViewEmployeeDirectory()
+    {
+        return $this->hasPermission('employees', 'view') || $this->isDepartmentHead();
+    }
+
+    public function canReviewDepartmentRequest(Employee $employee, $module)
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->isDepartmentHead()) {
+            return (int) $this->employee_id !== (int) $employee->id
+                && $this->isDepartmentHeadOfEmployee($employee);
+        }
+
+        return (int) $this->employee_id !== (int) $employee->id
+            && $this->hasPermission($module, 'edit');
     }
 
     public function hasPermission($module, $action = 'view')

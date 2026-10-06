@@ -9,6 +9,10 @@
         if (count($experienceRows) === 0) {
             $experienceRows = [[]];
         }
+        $educationRows = old('education', ($employee && method_exists($employee, 'educations')) ? $employee->educations->toArray() : [[]]);
+        if (count($educationRows) === 0) {
+            $educationRows = [[]];
+        }
         $requiredDocumentLabels = [
             'photo' => 'Photo',
             'aadhaar' => 'Aadhaar card',
@@ -480,6 +484,48 @@
             border: 1px solid var(--ob-border);
             border-radius: 12px;
             background: var(--ob-bg);
+        }
+
+        /* Education entry + table */
+        .education-entry-panel {
+            padding: 20px;
+            border: 1px solid #dbe3ef;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+            margin-bottom: 20px;
+        }
+        .education-entry-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .education-entry-title h3 { margin: 0; font-size: 15px; font-weight: 800; color: #111827; }
+        .education-entry-title span { font-size: 12px; font-weight: 700; color: #64748b; }
+        .education-add-btn { margin-top: 18px; background: #07833f; border-color: #07833f; color: #fff; font-weight: 800; padding: 12px 22px; }
+        .education-add-btn:hover { background: #075d32; border-color: #075d32; color: #fff; }
+        .education-table-wrap { margin-top: 20px; border: 1px solid #dbe3ef; border-radius: 14px; overflow: auto; background: #fff; }
+        .education-table-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; background: linear-gradient(135deg, #075d32, #07833f); color: #fff; }
+        .education-table-head h3 { margin: 0; font-size: 15px; font-weight: 800; }
+        .education-count { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 12px; font-weight: 900; }
+        .education-table { width: 100%; min-width: 920px; border-collapse: collapse; }
+        .education-table th { padding: 12px 14px; background: #f1f5f9; color: #334155; border-bottom: 1px solid #dbe3ef; text-align: left; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+        .education-table td { padding: 12px 14px; border-bottom: 1px solid #e5e7eb; color: #1f2937; font-size: 13px; font-weight: 600; vertical-align: middle; }
+        .education-table tbody tr:last-child td { border-bottom: 0; }
+        .education-table tbody tr:hover { background: #f8fafc; }
+        .education-level-badge { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #e8f0fe; color: #1d4ed8; font-size: 11px; font-weight: 900; white-space: nowrap; }
+        .education-file-preview { display: inline-flex; align-items: center; gap: 8px; max-width: 180px; color: #2563eb; font-size: 12px; font-weight: 800; }
+        .education-file-preview img { width: 42px; height: 42px; object-fit: cover; border-radius: 7px; border: 1px solid #dbe3ef; }
+        .education-file-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 7px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 9px; font-weight: 900; }
+        .education-row-actions { display: flex; gap: 7px; white-space: nowrap; }
+        .education-action { border: 1px solid #d1d5db; background: #fff; border-radius: 7px; padding: 6px 9px; font-size: 11px; font-weight: 800; cursor: pointer; }
+        .education-action.remove { color: #b91c1c; border-color: #fecaca; }
+        .education-empty { padding: 28px 18px; text-align: center; color: #64748b; font-size: 13px; font-weight: 700; }
+        .education-hidden-storage { display: none !important; }
+        .education-hidden-row { display: none !important; }
+        @media (max-width: 720px) {
+            .education-entry-title { align-items: flex-start; flex-direction: column; }
         }
 
         .ob-repeat-card .ob-fields {
@@ -1101,10 +1147,111 @@
                 </div>
             </section>
 
-            {{-- 05 Experience --}}
-            <section class="ob-section" data-title="Previous experience">
+            {{-- 05 Education --}}
+            <section class="ob-section" data-title="Education details">
                 <div class="ob-section-head">
                     <span class="ob-step">5</span>
+                    <div>
+                        <h2>Education details</h2>
+                        <p>Add one qualification at a time. After you click <strong>Add qualification</strong>, it will appear in the table below.</p>
+                    </div>
+                </div>
+
+                <div class="education-entry-panel" id="education-entry-panel">
+                    <div class="education-entry-title">
+                        <h3>Add education qualification</h3>
+                        <span>Fill all required fields, choose the certificate/marksheet, then click Add.</span>
+                    </div>
+
+                    <div class="ob-fields">
+                        <label class="ob-field">
+                            <span class="ob-label">Level<span class="req">*</span></span>
+                            <select id="education-entry-level">
+                                <option value="">Select level</option>
+                                <option value="10th">10th (SSC)</option>
+                                <option value="12th">12th (HSC)</option>
+                                <option value="diploma">Diploma</option>
+                                <option value="bachelors">Bachelor's degree</option>
+                                <option value="masters">Master's / Post Graduation</option>
+                                <option value="doctorate">Doctorate / PhD</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+
+                        <label class="ob-field">
+                            <span class="ob-label">Course / degree<span class="req">*</span></span>
+                            <input id="education-entry-degree" type="text" maxlength="120" placeholder="e.g. BCA, MCA, B.E. Computer Engineering">
+                        </label>
+
+                        <label class="ob-field">
+                            <span class="ob-label">School / college<span class="req">*</span></span>
+                            <input id="education-entry-institution" type="text" maxlength="150" placeholder="e.g. MES IMCC, Pune">
+                        </label>
+
+                        <label class="ob-field">
+                            <span class="ob-label">University / board</span>
+                            <input id="education-entry-board" type="text" maxlength="150" placeholder="e.g. Savitribai Phule Pune University">
+                        </label>
+
+                        <label class="ob-field">
+                            <span class="ob-label">Year of passing<span class="req">*</span></span>
+                            <input id="education-entry-year" type="number" min="1950" max="{{ now()->year }}" step="1" placeholder="e.g. 2026">
+                        </label>
+
+                        <label class="ob-field">
+                            <span class="ob-label">Percentage / CGPA</span>
+                            <input id="education-entry-grade" type="text" maxlength="20" placeholder="e.g. 82.5% or 8.4 CGPA">
+                        </label>
+
+                        <label class="ob-field wide document-upload">
+                            <span class="ob-label">Certificate / marksheet<span class="req">*</span></span>
+                            <input id="education-entry-certificate" type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                                data-max-size="10485760">
+                            <div class="ob-upload-preview" data-upload-preview></div>
+                            <span class="ob-hint">PDF, JPG or PNG, maximum 10 MB.</span>
+                        </label>
+                    </div>
+
+                    <button class="ob-btn education-add-btn" type="button" id="add-education-btn">
+                        + Add qualification
+                    </button>
+                </div>
+
+                <div class="education-table-wrap">
+                    <div class="education-table-head">
+                        <h3>Added education qualifications</h3>
+                        <span class="education-count" id="education-count">0</span>
+                    </div>
+                    <table class="education-table">
+                        <thead>
+                            <tr>
+                                <th>Qualification</th>
+                                <th>Course / Degree</th>
+                                <th>School / College</th>
+                                <th>Board / University</th>
+                                <th>Year</th>
+                                <th>Grade</th>
+                                <th>Certificate</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="education-table-body"></tbody>
+                    </table>
+                    <div class="education-empty" id="education-empty">
+                        No education qualification added yet. Fill the form above and click <strong>Add qualification</strong>.
+                    </div>
+                </div>
+
+                {{-- These hidden rows are the actual education fields submitted with the main onboarding form. --}}
+                <input type="hidden" name="education_submitted" value="1">
+                <div class="education-hidden-storage" id="education-hidden-storage"></div>
+            </section>
+
+            {{-- 06 Experience --}}
+            <section class="ob-section" data-title="Previous experience">
+                <div class="ob-section-head">
+                    <span class="ob-step">6</span>
                     <div>
                         <h2>Previous experience <span class="ob-tag">Optional</span></h2>
                         <p>Add earlier roles that are part of the employee's work history.</p>
@@ -1150,10 +1297,10 @@
                 <button class="ob-btn" type="button" data-repeat-add="experience">+ Add previous role</button>
             </section>
 
-            {{-- 06 Required docs --}}
+            {{-- 07 Required docs --}}
             <section class="ob-section" data-title="Required documents">
                 <div class="ob-section-head">
-                    <span class="ob-step">6</span>
+                    <span class="ob-step">7</span>
                     <div>
                         <h2>Required documents</h2>
                         <p>Upload a photo, Aadhaar card and bank passbook. Each file can be up to 10 MB.</p>
@@ -1183,10 +1330,10 @@
                 </div>
             </section>
 
-            {{-- 07 Additional docs --}}
+            {{-- 08 Additional docs --}}
             <section class="ob-section" data-title="Additional documents">
                 <div class="ob-section-head">
-                    <span class="ob-step">7</span>
+                    <span class="ob-step">8</span>
                     <div>
                         <h2>Additional documents <span class="ob-tag">Optional</span></h2>
                         <p>Any other documents. PDF, JPG, PNG or Office files up to 10 MB each.</p>
@@ -1594,13 +1741,296 @@
             });
             syncBankRequirements();
 
+            /* ---------- education: add one entry -> show it in table -> keep it in form submission ---------- */
+            var educationEntry = {
+                level: document.getElementById('education-entry-level'),
+                degree: document.getElementById('education-entry-degree'),
+                institution: document.getElementById('education-entry-institution'),
+                board: document.getElementById('education-entry-board'),
+                year: document.getElementById('education-entry-year'),
+                grade: document.getElementById('education-entry-grade'),
+                certificate: document.getElementById('education-entry-certificate')
+            };
+            var educationTableBody = document.getElementById('education-table-body');
+            var educationEmpty = document.getElementById('education-empty');
+            var educationCount = document.getElementById('education-count');
+            var educationStorage = document.getElementById('education-hidden-storage');
+            var educationNextIndex = 0;
+            var educationRowsFromServer = @json($educationRows);
+            var educationFileUrls = [];
+            var educationCertificateUrlTemplate = @json(route('portal.employee-education-certificates.download', '__education__'));
+            var educationLabels = {
+                '10th': '10th (SSC)',
+                '12th': '12th (HSC)',
+                'diploma': 'Diploma',
+                'bachelors': "Bachelor's degree",
+                'masters': "Master's / Post Graduation",
+                'doctorate': 'Doctorate / PhD',
+                'other': 'Other'
+            };
+
+            function educationIsImage(fileName, mime) {
+                return (mime && mime.indexOf('image/') === 0) || /\.(jpe?g|png|gif|webp|bmp)$/i.test(fileName || '');
+            }
+
+            function educationFileType(fileName) {
+                var parts = String(fileName || '').split('.');
+                return parts.length > 1 ? parts.pop().toUpperCase() : 'FILE';
+            }
+
+            function educationUpdateEmptyState() {
+                var count = educationTableBody.querySelectorAll('tr').length;
+                educationCount.textContent = count;
+                educationEmpty.style.display = count ? 'none' : 'block';
+            }
+
+            function educationRenderCertificate(cell, fileName, file, educationId) {
+                cell.textContent = '';
+                if (!fileName && !file) {
+                    cell.textContent = '-';
+                    return;
+                }
+
+                var wrap = document.createElement('span');
+                wrap.className = 'education-file-preview';
+
+                if (file && educationIsImage(file.name, file.type)) {
+                    var img = document.createElement('img');
+                    img.alt = 'Certificate preview';
+                    var url = URL.createObjectURL(file);
+                    educationFileUrls.push(url);
+                    img.src = url;
+                    wrap.appendChild(img);
+                } else {
+                    var icon = document.createElement('span');
+                    icon.className = 'education-file-icon';
+                    icon.textContent = educationFileType(fileName || 'file');
+                    wrap.appendChild(icon);
+                }
+
+                var name = educationId && !file
+                    ? document.createElement('a')
+                    : document.createElement('span');
+                name.textContent = fileName || 'Certificate';
+                if (educationId && !file) {
+                    name.href = educationCertificateUrlTemplate.replace('__education__', encodeURIComponent(educationId));
+                    name.target = '_blank';
+                    name.rel = 'noopener';
+                }
+                wrap.appendChild(name);
+                cell.appendChild(wrap);
+            }
+
+            function educationHiddenInput(card, index, name, value) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'education[' + index + '][' + name + ']';
+                input.value = value == null ? '' : value;
+                card.appendChild(input);
+                return input;
+            }
+
+            function educationAddTableRow(data, card) {
+                var tr = document.createElement('tr');
+                tr.dataset.educationIndex = card.dataset.educationIndex;
+
+                [
+                    educationLabels[data.level] || data.level,
+                    data.degree,
+                    data.institution,
+                    data.board_university,
+                    data.year_of_passing,
+                    data.grade
+                ].forEach(function(value, i) {
+                    var td = document.createElement('td');
+                    if (i === 0) {
+                        var badge = document.createElement('span');
+                        badge.className = 'education-level-badge';
+                        badge.textContent = value || '-';
+                        td.appendChild(badge);
+                    } else {
+                        td.textContent = value || '-';
+                    }
+                    tr.appendChild(td);
+                });
+
+                var fileCell = document.createElement('td');
+                var fileInput = card.querySelector('input[type="file"]');
+                var fileName = fileInput && fileInput.files.length
+                    ? fileInput.files[0].name
+                    : (data.certificate_original_name || data.certificate_name || '');
+                educationRenderCertificate(fileCell, fileName, fileInput && fileInput.files[0], data.id);
+                tr.appendChild(fileCell);
+
+                var actionCell = document.createElement('td');
+                var actions = document.createElement('div');
+                actions.className = 'education-row-actions';
+                var remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'education-action remove';
+                remove.dataset.educationRemove = '1';
+                remove.textContent = 'Remove';
+                actions.appendChild(remove);
+                actionCell.appendChild(actions);
+                tr.appendChild(actionCell);
+
+                educationTableBody.appendChild(tr);
+            }
+
+            function educationCreateExistingRow(data) {
+                var index = educationNextIndex++;
+                var card = document.createElement('div');
+                card.className = 'education-hidden-row';
+                card.dataset.educationIndex = index;
+                card.dataset.educationId = data.id || '';
+
+                educationHiddenInput(card, index, 'id', data.id || '');
+                educationHiddenInput(card, index, 'level', data.level || '');
+                educationHiddenInput(card, index, 'degree', data.degree || '');
+                educationHiddenInput(card, index, 'institution', data.institution || '');
+                educationHiddenInput(card, index, 'board_university', data.board_university || '');
+                educationHiddenInput(card, index, 'year_of_passing', data.year_of_passing || '');
+                educationHiddenInput(card, index, 'grade', data.grade || '');
+                educationHiddenInput(card, index, 'certificate_original_name', data.certificate_original_name || '');
+
+                educationStorage.appendChild(card);
+                educationAddTableRow(data, card);
+            }
+
+            function educationValidateEntry() {
+                var required = [educationEntry.level, educationEntry.degree, educationEntry.institution, educationEntry.year, educationEntry.certificate];
+                var valid = true;
+                required.forEach(function(el) {
+                    var missing = el.type === 'file' ? !el.files.length : !el.value.trim();
+                    el.setCustomValidity(missing ? 'This field is required.' : '');
+                    if (missing) valid = false;
+                });
+
+                var year = Number(educationEntry.year.value);
+                if (educationEntry.year.value && (year < 1950 || year > new Date().getFullYear())) {
+                    educationEntry.year.setCustomValidity('Enter a valid passing year.');
+                    valid = false;
+                }
+
+                var file = educationEntry.certificate.files[0];
+                if (file && file.size > 10485760) {
+                    educationEntry.certificate.setCustomValidity('Certificate must be 10 MB or smaller.');
+                    valid = false;
+                }
+                return valid;
+            }
+
+            function educationResetEntry() {
+                var oldFileInput = educationEntry.certificate;
+                var label = document.querySelector('#education-entry-panel .document-upload');
+                var previewBox = label ? label.querySelector('[data-upload-preview]') : null;
+
+                var newFileInput = document.createElement('input');
+                newFileInput.id = 'education-entry-certificate';
+                newFileInput.type = 'file';
+                newFileInput.accept = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+                newFileInput.dataset.maxSize = '10485760';
+                label.insertBefore(newFileInput, previewBox);
+                educationEntry.certificate = newFileInput;
+
+                newFileInput.addEventListener('change', function() {
+                    validateFileSize(this);
+                    renderFilePreview(this);
+                });
+
+                educationEntry.level.value = '';
+                educationEntry.degree.value = '';
+                educationEntry.institution.value = '';
+                educationEntry.board.value = '';
+                educationEntry.year.value = '';
+                educationEntry.grade.value = '';
+                educationEntry.level.setCustomValidity('');
+                educationEntry.degree.setCustomValidity('');
+                educationEntry.institution.setCustomValidity('');
+                educationEntry.year.setCustomValidity('');
+                newFileInput.setCustomValidity('');
+                if (previewBox) {
+                    previewBox.textContent = '';
+                    previewBox.classList.remove('is-visible');
+                }
+            }
+
+            document.getElementById('add-education-btn').addEventListener('click', function() {
+                if (!educationValidateEntry()) {
+                    var firstInvalid = [educationEntry.level, educationEntry.degree, educationEntry.institution, educationEntry.year, educationEntry.certificate].find(function(el) {
+                        return !el.checkValidity();
+                    });
+                    if (firstInvalid) firstInvalid.reportValidity();
+                    return;
+                }
+
+                var index = educationNextIndex++;
+                var data = {
+                    level: educationEntry.level.value,
+                    degree: educationEntry.degree.value.trim(),
+                    institution: educationEntry.institution.value.trim(),
+                    board_university: educationEntry.board.value.trim(),
+                    year_of_passing: educationEntry.year.value,
+                    grade: educationEntry.grade.value.trim()
+                };
+
+                var card = document.createElement('div');
+                card.className = 'education-hidden-row';
+                card.dataset.educationIndex = index;
+
+                educationHiddenInput(card, index, 'level', data.level);
+                educationHiddenInput(card, index, 'degree', data.degree);
+                educationHiddenInput(card, index, 'institution', data.institution);
+                educationHiddenInput(card, index, 'board_university', data.board_university);
+                educationHiddenInput(card, index, 'year_of_passing', data.year_of_passing);
+                educationHiddenInput(card, index, 'grade', data.grade);
+
+                // Move the actual file input into the hidden submitted row so the file is not lost.
+                var fileInput = educationEntry.certificate;
+                fileInput.name = 'education[' + index + '][certificate]';
+                fileInput.removeAttribute('id');
+                fileInput.style.display = 'none';
+                card.appendChild(fileInput);
+                educationStorage.appendChild(card);
+
+                educationAddTableRow(data, card);
+                educationUpdateEmptyState();
+                educationResetEntry();
+                educationEntry.level.focus();
+            });
+
+            educationTableBody.addEventListener('click', function(event) {
+                var removeButton = event.target.closest('[data-education-remove]');
+                if (!removeButton) return;
+                var row = removeButton.closest('tr');
+                var index = row ? row.dataset.educationIndex : null;
+                var card = index !== null
+                    ? educationStorage.querySelector('[data-education-index="' + index + '"]')
+                    : null;
+                if (card) card.remove();
+                if (row) row.remove();
+                educationUpdateEmptyState();
+            });
+
+            educationEntry.certificate.addEventListener('change', function() {
+                validateFileSize(this);
+                renderFilePreview(this);
+            });
+
+            educationRowsFromServer.forEach(function(row) {
+                if (row && row.level) educationCreateExistingRow(row);
+            });
+            educationUpdateEmptyState();
+
             /* ---------- add / remove repeat rows ---------- */
-            document.querySelectorAll('[data-repeat-add]').forEach(function(button) {
+            document.querySelectorAll('[data-repeat-add="experience"], [data-repeat-add="documents"]').forEach(function(button) {
                 button.addEventListener('click', function() {
                     var name = button.dataset.repeatAdd;
                     var list = document.querySelector('[data-repeat-list="' + name + '"]');
-                    var tpl = document.getElementById(name === 'experience' ?
-                        'experience-row-template' : 'document-row-template');
+                    var tpl = document.getElementById({
+                        experience: 'experience-row-template',
+                        education: 'education-row-template'
+                    }[name] || 'document-row-template');
                     var index = Number(list.dataset.nextIndex || 0);
                     if (name === 'documents' && list.children.length >= 10) {
                         button.disabled = true;
@@ -1615,7 +2045,7 @@
                     validateNamedFields(list.lastElementChild);
                     list.dataset.nextIndex = String(index + 1);
                     if (name === 'documents' && list.children.length >= 10) button.disabled = true;
-                    var first = list.lastElementChild.querySelector('input');
+                    var first = list.lastElementChild.querySelector('input, select');
                     if (first) first.focus();
                 });
             });
@@ -1634,7 +2064,7 @@
                 var span = label.querySelector('.ob-label');
                 if (!span) return '';
                 var c = span.cloneNode(true);
-                c.querySelectorAll('.req, .ob-badge-ok').forEach(function(n) {
+                c.querySelectorAll('.req, .ob-badge-ok, .ob-tag').forEach(function(n) {
                     n.remove();
                 });
                 return c.textContent.trim();
@@ -1709,8 +2139,10 @@
                         if (cards.length > 1) {
                             var sub = document.createElement('p');
                             sub.className = 'ob-pv-sub';
-                            sub.textContent = (section.dataset.title === 'Previous experience' ?
-                                'Role ' : 'Document ') + (i + 1);
+                            sub.textContent = ({
+                                'Previous experience': 'Role ',
+                                'Education details': 'Qualification '
+                            }[section.dataset.title] || 'Document ') + (i + 1);
                             wrap.appendChild(sub);
                         }
                         wrap.appendChild(dl);

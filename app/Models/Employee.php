@@ -84,6 +84,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeExperience::class)->orderByDesc('start_date');
     }
 
+    public function educations()
+    {
+        return $this->hasMany(EmployeeEducation::class)->orderByDesc('year_of_passing');
+    }
+
     public function documents()
     {
         return $this->hasMany(EmployeeDocument::class)->orderByDesc('created_at');

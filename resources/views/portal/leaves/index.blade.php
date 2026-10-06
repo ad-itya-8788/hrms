@@ -186,6 +186,10 @@
         color: #4b5563;
     }
 
+    .leave-actions { display: flex; gap: 6px; }
+    .leave-actions button { padding: 6px 9px; border: 1px solid #b9e5c7; border-radius: 6px; background: #f0fdf4; color: #166534; font: 700 11px inherit; font-family: inherit; cursor: pointer; }
+    .leave-actions button.reject { border-color: #f2c6c2; background: #fff5f4; color: #a12b22; }
+
     .empty-state {
         padding: 55px 20px;
         text-align: center;
@@ -233,21 +237,18 @@
     <div class="page-header">
 
         <div>
-            <p class="eyebrow">EMPLOYEE · LEAVE MANAGEMENT</p>
+            <p class="eyebrow">{{ $showEmployee ? 'DEPARTMENT · LEAVE MANAGEMENT' : 'EMPLOYEE · LEAVE MANAGEMENT' }}</p>
 
-            <h1>My Leave Applications</h1>
+            <h1>{{ $showEmployee ? 'Department leave requests' : 'My Leave Applications' }}</h1>
 
             <p>
-                View and track all your submitted leave applications.
+                {{ $showEmployee ? 'Review leave requests submitted by employees in your department.' : 'View and track all your submitted leave applications.' }}
             </p>
         </div>
 
-        <a
-            href="{{ route('portal.leaves.create') }}"
-            class="btn-primary"
-        >
-            + Apply for Leave
-        </a>
+        @if ($canCreateLeaves)
+            <a href="{{ route('portal.leaves.create') }}" class="btn-primary">+ Apply for Leave</a>
+        @endif
 
     </div>
 
@@ -264,7 +265,7 @@
             <h2>Leave History</h2>
 
             <p>
-                Your recent leave applications and their current status.
+                {{ $showEmployee ? 'Requests from employees in your department.' : 'Your recent leave applications and their current status.' }}
             </p>
 
         </div>
@@ -284,6 +285,8 @@
                             <th>Reason</th>
                             <th>Status</th>
                             <th>Applied On</th>
+                            @if ($showEmployee)<th>Employee</th>@endif
+                            @if ($canReviewLeaves)<th>Decision</th>@endif
                         </tr>
                     </thead>
 
@@ -356,6 +359,23 @@
                                         {{ $leave->created_at->format('d M Y') }}
                                     </span>
                                 </td>
+                                @if ($showEmployee)
+                                    <td>{{ optional($leave->employee)->full_name ?: 'Employee record unavailable' }}</td>
+                                @endif
+                                @if ($canReviewLeaves)
+                                    <td>
+                                        @if ($leave->status === 'Pending' && (auth()->user()->isSuperAdmin() || (int) auth()->user()->employee_id !== (int) $leave->employee_id))
+                                            <form class="leave-actions" method="POST" action="{{ route('portal.leaves.status', $leave->id) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" name="status" value="Approved">Approve</button>
+                                                <button class="reject" type="submit" name="status" value="Rejected">Reject</button>
+                                            </form>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                @endif
 
                             </tr>
 
@@ -385,12 +405,9 @@
                     You haven't submitted any leave application.
                 </p>
 
-                <a
-                    href="{{ route('portal.leaves.create') }}"
-                    class="btn-primary"
-                >
-                    Apply for Leave
-                </a>
+                @if ($canCreateLeaves)
+                    <a href="{{ route('portal.leaves.create') }}" class="btn-primary">Apply for Leave</a>
+                @endif
 
             </div>
 

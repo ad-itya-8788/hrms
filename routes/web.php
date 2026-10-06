@@ -1,19 +1,19 @@
 <?php
 
-use App\Http\Controllers\Auth\PortalController as AuthPortalController;
+use App\Http\Controllers\PortalController as AuthPortalController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HolidayController;
-use App\Http\Controllers\HR\EmployeeController;
-use App\Http\Controllers\HR\LookupController;
-use App\Http\Controllers\SuperAdmin\DepartmentController;
-use App\Http\Controllers\SuperAdmin\EmployeeRoleController;
-use App\Http\Controllers\SuperAdmin\EmployeeTypeController;
-use App\Http\Controllers\SuperAdmin\ExitPassController;
-use App\Http\Controllers\SuperAdmin\LeaveController;
-use App\Http\Controllers\SuperAdmin\ModuleAccessController;
-use App\Http\Controllers\SuperAdmin\SystemUserController;
-use App\Http\Controllers\SuperAdmin\UserRoleManagementController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\LookupController;
+use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\EmployeeRoleController;
+use App\Http\Controllers\EmployeeTypeController;
+use App\Http\Controllers\ExitPassController;
+use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\ModuleAccessController;
+use App\Http\Controllers\SystemUserController;
+use App\Http\Controllers\UserRoleManagementController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,6 +46,10 @@ Route::middleware('auth')->prefix('portal')->name('portal.')->group(function () 
 
     Route::get('/', [DashboardController::class, 'page'])->name('dashboard');
 
+    Route::get('/dashboard/statistics', [DashboardController::class, 'statistics'])
+        ->middleware('superadmin')
+        ->name('dashboard.statistics');
+
     /*
     |--------------------------------------------------------------------------
     | Account
@@ -71,6 +75,8 @@ Route::middleware('auth')->prefix('portal')->name('portal.')->group(function () 
     Route::get('/employee-documents/{document}/preview', [EmployeeController::class, 'previewDocument'])->name('employee-documents.preview');
 
     Route::get('/employee-documents/{document}', [EmployeeController::class, 'downloadDocument'])->name('employee-documents.download');
+
+    Route::get('/employee-education-certificates/{education}/download', [EmployeeController::class, 'downloadEducationCertificate'])->name('employee-education-certificates.download');
 
     Route::get('/employees/{employee}', [EmployeeController::class, 'profilePage'])->name('employees.show');
 
@@ -108,6 +114,8 @@ Route::middleware('auth')->prefix('portal')->name('portal.')->group(function () 
 
     Route::post('/leaves', [LeaveController::class, 'store'])->middleware('permission:leaves,create')->name('leaves.store');
 
+    Route::patch('/leaves/{leave}/status', [LeaveController::class, 'updateStatus'])->name('leaves.status');
+
     /*
     |--------------------------------------------------------------------------
     | Exit Pass
@@ -122,7 +130,7 @@ Route::middleware('auth')->prefix('portal')->name('portal.')->group(function () 
 
     Route::put('/exit-pass/{exitPass}', [ExitPassController::class, 'update'])->middleware('permission:exit_pass,edit')->name('exit-pass.update');
 
-    Route::patch('/exit-pass/{exitPass}/status', [ExitPassController::class, 'updateStatus'])->middleware('permission:exit_pass,delete')->name('exit-pass.status');
+    Route::patch('/exit-pass/{exitPass}/status', [ExitPassController::class, 'updateStatus'])->name('exit-pass.status');
 
     /*
     |--------------------------------------------------------------------------

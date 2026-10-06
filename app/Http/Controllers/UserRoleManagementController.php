@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\SuperAdmin;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\UserRole;
@@ -37,7 +37,7 @@ class UserRoleManagementController extends Controller
                 'max:30',
                 'regex:/^[a-z][a-z0-9_]*$/',
                 'unique:user_roles,name',
-                Rule::notIn(['admin', 'super_admin']),
+                Rule::notIn(['admin', 'super_admin', 'superadmin', 'hr', 'emp']),
             ],
         ]);
 
@@ -63,7 +63,7 @@ class UserRoleManagementController extends Controller
 
     public function update(Request $request, UserRole $userRole)
     {
-        abort_if(in_array($userRole->name, ['admin', 'super_admin'], true), 404);
+        abort_if(in_array($userRole->name, ['admin', 'super_admin', 'superadmin', 'hr', 'emp'], true), 404);
 
         $attributes = $request->validate([
             'name' => [
@@ -72,7 +72,7 @@ class UserRoleManagementController extends Controller
                 'max:30',
                 'regex:/^[a-z][a-z0-9_]*$/',
                 Rule::unique('user_roles', 'name')->ignore($userRole->id),
-                Rule::notIn(['admin', 'super_admin']),
+                Rule::notIn(['admin', 'super_admin', 'superadmin', 'hr', 'emp']),
             ],
         ]);
 
@@ -85,7 +85,7 @@ class UserRoleManagementController extends Controller
 
     public function updateStatus(Request $request, UserRole $userRole)
     {
-        abort_if(in_array($userRole->name, ['admin', 'super_admin'], true), 404);
+        abort_if(in_array($userRole->name, ['admin', 'super_admin', 'superadmin', 'hr', 'emp'], true), 404);
 
         $attributes = $request->validate(['is_active' => 'required|boolean']);
         $userRole->update($attributes);

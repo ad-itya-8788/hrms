@@ -1,10 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\SuperAdmin;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExitPass;
+use App\Models\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ExitPassController extends Controller
 {
@@ -20,18 +22,24 @@ class ExitPassController extends Controller
             ->orderByDesc('exit_date')
             ->orderByDesc('exit_time');
 
-        if (!$user->hasPermission('employees', 'view')) {
-            if ($user->employee) {
-                $query->where('employee_id', $user->employee->id);
-            } else {
-                $query->whereRaw('1 = 0');
-            }
+        $isHead = $user->isDepartmentHead();
+        $canViewRequests = $user->hasPermission('exit_pass', 'view') || $isHead;
+        abort_unless($canViewRequests, 403);
+        if ($isHead && !$user->isSuperAdmin()) {
+            $query->whereHas('employee', function ($employeeQuery) use ($user) {
+                $employeeQuery->whereIn('department_id', $user->headedDepartmentIds());
+            });
+        } elseif ($user->isEmployeeAccount()) {
+            $query->where('employee_id', $user->employee_id ?: 0);
         }
 
         return view('portal.exit-pass.index', [
             'exitPasses' => $query->paginate(10),
             'canCreate' => $user->hasPermission('exit_pass', 'create'),
-            'canViewEmployees' => $user->hasPermission('employees', 'view'),
+            'canViewEmployees' => $user->canViewEmployeeDirectory(),
+            'canReviewExitPasses' => $user->isSuperAdmin()
+                || ($user->hasPermission('exit_pass', 'edit') && !$isHead)
+                || $isHead,
             'pageTitle' => 'Exit Passes',
         ]);
     }
@@ -125,15 +133,39 @@ class ExitPassController extends Controller
      * @param  mixed  $exitPass
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function updateStatus(Request $request, $exitPass)
+    public function updateStatus(Request $request, ExitPass $exitPass)
     {
-        /*
-         * Exit Pass status logic will be added here
-         * after confirming your existing Exit Pass model/table.
-         */
+        $attributes = $request->validate([
+            'status' => 'required|in:Approved,Rejected',
+            'admin_remark' => 'nullable|string|max:2000',
+        ]);
+        $user = $request->user();
+        $exitPass = DB::transaction(function () use ($exitPass, $attributes, $user) {
+            $lockedPass = ExitPass::whereKey($exitPass->id)->lockForUpdate()->firstOrFail();
+            $employee = Employee::findOrFail($lockedPass->employee_id);
+            abort_unless($user->canReviewDepartmentRequest($employee, 'exit_pass'), 403);
+            if (strtolower($lockedPass->status) !== 'pending') {
+                abort(409, 'This exit pass has already been reviewed.');
+            }
 
-        return redirect()
-            ->route('portal.exit-pass.index')
-            ->with('status', 'Exit Pass status updated successfully.');
+            $lockedPass->update([
+                'status' => $attributes['status'],
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+                'admin_remark' => $attributes['admin_remark'] ?? null,
+            ]);
+
+            return $lockedPass;
+        });
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Exit pass ' . strtolower($exitPass->status) . '.',
+                'data' => $exitPass,
+            ]);
+        }
+
+        return redirect()->back()->with('status', 'Exit pass ' . strtolower($exitPass->status) . '.');
     }
 }

@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\HR;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeEducation;
 use App\Models\EmployeeRole;
 use App\Models\EmployeeType;
 use App\Models\User;
@@ -44,7 +45,7 @@ class EmployeeController extends Controller
 
     public function editOnboarding(Employee $employee)
     {
-        $employee->load(['experiences', 'documents']);
+        $employee->load(['experiences', 'educations', 'documents']);
         $bankDetails = $employee->bankDetails;
         $bank = $bankDetails ? [
             'account_holder' => $bankDetails->account_holder,
@@ -75,6 +76,7 @@ class EmployeeController extends Controller
 
     public function indexPage(Request $request)
     {
+        $user = $request->user();
         $response = $this->index($request);
         if ($response->getStatusCode() !== 200) {
             abort($response->getStatusCode(), 'The employee directory could not be loaded.');
@@ -83,14 +85,22 @@ class EmployeeController extends Controller
         $payload = $response->getData(true);
 
         $recordStatus = $request->input('record_status', 'active');
+        $employeeCountQuery = Employee::query();
+        if ($user->isDepartmentHead() && !$user->isSuperAdmin()) {
+            $employeeCountQuery->whereIn('department_id', $user->headedDepartmentIds());
+        }
+        $departmentQuery = Department::query();
+        if ($user->isDepartmentHead() && !$user->isSuperAdmin()) {
+            $departmentQuery->whereIn('id', $user->headedDepartmentIds());
+        }
 
         return view('portal.employee_management.index', [
             'employees' => $payload['data'],
             'pagination' => $payload['meta'],
             'recordStatus' => $recordStatus,
-            'activeEmployeeCount' => Employee::where('is_active', true)->count(),
-            'inactiveEmployeeCount' => Employee::where('is_active', false)->count(),
-            'departments' => Department::orderBy('name')->get(['id', 'name']),
+            'activeEmployeeCount' => (clone $employeeCountQuery)->where('is_active', true)->count(),
+            'inactiveEmployeeCount' => (clone $employeeCountQuery)->where('is_active', false)->count(),
+            'departments' => $departmentQuery->orderBy('name')->get(['id', 'name']),
             'employeeTypes' => EmployeeType::orderBy('name')->get(['id', 'name']),
             'employeeRoles' => EmployeeRole::orderBy('name')->get(['id', 'name']),
             'search' => $request->input('search', ''),
@@ -100,9 +110,9 @@ class EmployeeController extends Controller
             'employeeRoleId' => $request->input('employee_role_id', ''),
             'joinedFrom' => $request->input('from', ''),
             'joinedTo' => $request->input('to', ''),
-            'canCreateEmployees' => $request->user()->hasPermission('employees', 'create'),
-            'canEditEmployees' => $request->user()->hasPermission('employees', 'edit'),
-            'canDeleteEmployees' => $request->user()->hasPermission('employees', 'delete'),
+            'canCreateEmployees' => $user->hasPermission('employees', 'create'),
+            'canEditEmployees' => $user->hasPermission('employees', 'edit'),
+            'canDeleteEmployees' => $user->hasPermission('employees', 'delete'),
             'employeeDataUrl' => route('portal.data.employees.index'),
             'pageTitle' => 'Employees',
         ]);
@@ -116,7 +126,7 @@ class EmployeeController extends Controller
             && (int) $user->employee_id === (int) $employee->id) {
             $view = 'portal.employee_management.my-profile';
         } else {
-            abort_unless($user->hasPermission('employees', 'view'), 403);
+            abort_unless($user->canViewEmployeeRecord($employee), 403);
             $view = 'portal.employee_management.show';
         }
 
@@ -164,7 +174,11 @@ class EmployeeController extends Controller
         ]);
 
         $recordStatus = $request->input('record_status', 'active');
+        $user = $request->user();
         $query = Employee::with($this->relations)->where('is_active', $recordStatus === 'active');
+        if ($user->isDepartmentHead() && !$user->isSuperAdmin()) {
+            $query->whereIn('department_id', $user->headedDepartmentIds());
+        }
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
             $searchTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
@@ -200,10 +214,10 @@ class EmployeeController extends Controller
         $employees = $query->orderBy($sort, $direction)->orderBy('id')->paginate(50);
         $html = view('portal.employee_management.table', [
             'employees' => $employees->items(),
-            'actions' => $request->user()->hasPermission('employees', 'view')
+            'actions' => $user->canViewEmployeeDirectory()
                 || $request->user()->hasPermission('employees', 'edit')
                 || $request->user()->hasPermission('employees', 'delete'),
-            'canView' => $request->user()->hasPermission('employees', 'view'),
+            'canView' => $user->canViewEmployeeDirectory(),
             'canEdit' => $request->user()->hasPermission('employees', 'edit'),
             'canDelete' => $request->user()->hasPermission('employees', 'delete'),
         ])->render();
@@ -244,14 +258,16 @@ class EmployeeController extends Controller
     {
         $validator = Validator::make($request->all(), $this->onboardingRules());
         $this->validateExperienceDateRanges($validator, $request);
+        $this->validateEducationRecords($validator, $request);
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput($request->except(['bank', 'documents', 'required_documents']));
+            return back()->withErrors($validator)->withInput($this->onboardingInput($request));
         }
         $validated = $validator->validated();
         $storedFiles = [];
+        $obsoleteFiles = [];
 
         try {
-            DB::transaction(function () use ($request, $validated, &$storedFiles) {
+            DB::transaction(function () use ($request, $validated, &$storedFiles, &$obsoleteFiles) {
                 $department = Department::where('is_active', true)
                     ->lockForUpdate()
                     ->findOrFail($validated['department_id']);
@@ -272,24 +288,25 @@ class EmployeeController extends Controller
                     'employee_id' => $employee->id,
                 ]);
                 $this->saveOnboardingBankDetails($employee, $validated['bank'] ?? []);
+                $this->saveEducationRecords($employee, $validated['education'] ?? [], $request, $storedFiles, false, $obsoleteFiles);
                 $this->savePreviousExperience($employee, $validated['experience'] ?? []);
                 $this->saveOnboardingDocuments($employee, $validated['documents'] ?? [], $request, $storedFiles);
 
                 return $employee;
             });
 
+            $this->deleteObsoleteEducationCertificates($obsoleteFiles);
+
             return redirect()->route('portal.employees.index')
                 ->with('status', 'Employee onboarding details saved. Login email: ' . $validated['email'] . '. Temporary password: password. Ask the employee to change it after signing in.');
         } catch (\Throwable $exception) {
-            foreach ($storedFiles as $path) {
-                Storage::disk('local')->delete($path);
-            }
+            $this->deleteStoredOnboardingFiles($storedFiles);
             Log::error('Employee onboarding could not be saved.', [
                 'user_id' => $request->user()->id,
                 'exception' => get_class($exception),
             ]);
 
-            return back()->withInput($request->except(['bank', 'documents', 'required_documents']))->withErrors([
+            return back()->withInput($this->onboardingInput($request))->withErrors([
                 'onboarding' => 'The employee onboarding details could not be saved. Please try again.',
             ]);
         }
@@ -299,8 +316,9 @@ class EmployeeController extends Controller
     {
         $validator = Validator::make($request->all(), $this->onboardingRules($employee));
         $this->validateExperienceDateRanges($validator, $request);
+        $this->validateEducationRecords($validator, $request, $employee);
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput($request->except(['bank', 'documents', 'required_documents']));
+            return back()->withErrors($validator)->withInput($this->onboardingInput($request));
         }
         $validated = $validator->validated();
         foreach ($validated['experience'] ?? [] as $experience) {
@@ -309,9 +327,10 @@ class EmployeeController extends Controller
             }
         }
         $storedFiles = [];
+        $obsoleteFiles = [];
 
         try {
-            DB::transaction(function () use ($request, $validated, $employee, &$storedFiles) {
+            DB::transaction(function () use ($request, $validated, $employee, &$storedFiles, &$obsoleteFiles) {
                 if ((int) $validated['department_id'] !== (int) $employee->department_id) {
                     $department = Department::where('is_active', true)
                         ->lockForUpdate()
@@ -328,23 +347,26 @@ class EmployeeController extends Controller
                     ]);
                 }
                 $this->saveOnboardingBankDetails($employee, $validated['bank'] ?? []);
+                if ($request->input('education_submitted') === '1') {
+                    $this->saveEducationRecords($employee, $validated['education'] ?? [], $request, $storedFiles, true, $obsoleteFiles);
+                }
                 $this->savePreviousExperience($employee, $validated['experience'] ?? [], true);
                 $this->saveOnboardingDocuments($employee, $validated['documents'] ?? [], $request, $storedFiles);
             });
 
+            $this->deleteObsoleteEducationCertificates($obsoleteFiles);
+
             return redirect()->route('portal.employees.index')
                 ->with('status', 'Employee onboarding details updated successfully.');
         } catch (\Throwable $exception) {
-            foreach ($storedFiles as $path) {
-                Storage::disk('local')->delete($path);
-            }
+            $this->deleteStoredOnboardingFiles($storedFiles);
             Log::error('Employee onboarding could not be updated.', [
                 'employee_id' => $employee->id,
                 'user_id' => $request->user()->id,
                 'exception' => get_class($exception),
             ]);
 
-            return back()->withInput($request->except(['bank', 'documents', 'required_documents']))->withErrors([
+            return back()->withInput($this->onboardingInput($request))->withErrors([
                 'onboarding' => 'The employee onboarding details could not be updated. Please try again.',
             ]);
         }
@@ -356,6 +378,30 @@ class EmployeeController extends Controller
         abort_unless(Storage::disk('local')->exists($document->storage_path), 404, 'Employee document not found.');
 
         return Storage::disk('local')->download($document->storage_path, basename($document->original_name));
+    }
+
+    public function downloadEducationCertificate(Request $request, EmployeeEducation $education)
+    {
+        $user = $request->user();
+        $educationEmployee = Employee::findOrFail($education->employee_id);
+        $canViewEmployee = $user->canViewEmployeeRecord($educationEmployee)
+            || $user->hasPermission('employees', 'edit');
+        $canViewOwnEducation = $user->hasPermission('employee_profile', 'view')
+            && (int) $user->employee_id === (int) $education->employee_id;
+
+        abort_unless($canViewEmployee || $canViewOwnEducation, 403);
+        abort_unless(
+            $education->certificate_path
+                && strpos($education->certificate_path, 'employee-documents/') === 0
+                && Storage::disk('local')->exists($education->certificate_path),
+            404,
+            'Education certificate not found.'
+        );
+
+        return Storage::disk('local')->download(
+            $education->certificate_path,
+            basename($education->certificate_original_name ?: $education->certificate_path)
+        );
     }
 
     public function previewDocument(Request $request, EmployeeDocument $document)
@@ -373,21 +419,22 @@ class EmployeeController extends Controller
 
     private function canAccessDocument(User $user, EmployeeDocument $document)
     {
-        if ($user->hasPermission('employees', 'view')) {
-            return true;
-        }
-
-        return $user->hasPermission('employee_profile', 'view')
-            && (int) $user->employee_id === (int) $document->employee_id;
+        $employee = Employee::findOrFail($document->employee_id);
+        return $user->canViewEmployeeRecord($employee)
+            || ($user->hasPermission('employee_profile', 'view')
+                && (int) $user->employee_id === (int) $document->employee_id);
     }
 
     public function show(Employee $employee)
     {
+        abort_unless(request()->user()->canViewEmployeeRecord($employee), 403);
         return response()->json(['data' => $employee->load(array_merge($this->relations, ['manager:id,first_name,last_name']))]);
     }
 
     public function update(Request $request, Employee $employee)
     {
+        abort_unless($request->user()->canViewEmployeeRecord($employee)
+            || $request->user()->hasPermission('employees', 'edit'), 403);
         $attributes = $request->validate($this->rules($employee));
 
         try {
@@ -407,6 +454,8 @@ class EmployeeController extends Controller
 
     public function updateStatus(Request $request, Employee $employee)
     {
+        abort_unless($request->user()->canViewEmployeeRecord($employee)
+            || $request->user()->hasPermission('employees', 'delete'), 403);
         $attributes = $request->validate(['is_active' => 'required|boolean']);
 
         try {
@@ -526,6 +575,17 @@ class EmployeeController extends Controller
             'bank.ifsc_code' => 'nullable|required_with:bank.account_number|string|regex:/^[A-Z]{4}0[A-Z0-9]{6}$/i',
             'bank.branch' => 'nullable|string|max:120|regex:/^[\p{L}\p{M}0-9][\p{L}\p{M}0-9 .,&\'()-]*$/u',
             'bank.account_type' => 'nullable|in:savings,current,salary,other',
+            'education_submitted' => 'sometimes|in:1',
+            'education' => 'nullable|array',
+            'education.*' => 'array',
+            'education.*.id' => 'nullable|integer|distinct',
+            'education.*.level' => 'required|string|in:10th,12th,diploma,bachelors,masters,doctorate,other',
+            'education.*.degree' => 'required|string|max:120',
+            'education.*.institution' => 'required|string|max:150',
+            'education.*.board_university' => 'nullable|string|max:150',
+            'education.*.year_of_passing' => 'required|integer|min:1950|max:' . now()->year,
+            'education.*.grade' => 'nullable|string|max:20',
+            'education.*.certificate' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
             'experience' => 'nullable|array',
             'experience.*.id' => 'nullable|integer|distinct',
             'experience.*.company_name' => 'nullable|required_with:experience.*.job_title|string|max:120|regex:/^[\p{L}\p{M}0-9][\p{L}\p{M}0-9 .,&\'()-]*$/u',
@@ -633,7 +693,14 @@ class EmployeeController extends Controller
     private function onboardingEmployeeAttributes(array $validated)
     {
         $attributes = $validated;
-        unset($attributes['bank'], $attributes['experience'], $attributes['documents'], $attributes['required_documents']);
+        unset(
+            $attributes['bank'],
+            $attributes['education'],
+            $attributes['education_submitted'],
+            $attributes['experience'],
+            $attributes['documents'],
+            $attributes['required_documents']
+        );
         $attributes['city'] = $attributes['city'] ?: 'Pune';
         $attributes['state'] = $attributes['state'] ?: 'Maharashtra';
 
@@ -654,6 +721,163 @@ class EmployeeController extends Controller
             'branch' => $bank['branch'] ?? null,
             'account_type' => $bank['account_type'] ?? null,
         ]);
+    }
+
+    private function validateEducationRecords($validator, Request $request, Employee $employee = null)
+    {
+        $educationRows = $request->input('education', []);
+        if (!is_array($educationRows)) {
+            return;
+        }
+
+        foreach ($educationRows as $index => $education) {
+            if (!is_array($education)) {
+                continue;
+            }
+
+            $educationId = $education['id'] ?? null;
+            $existingEducation = null;
+            if ($educationId !== null && $educationId !== '') {
+                if ($employee) {
+                    $existingEducation = $employee->educations()
+                        ->where('id', $educationId)
+                        ->first();
+                }
+                if (!$existingEducation) {
+                    $validator->errors()->add(
+                        'education.' . $index . '.id',
+                        'The selected education record is invalid.'
+                    );
+                    continue;
+                }
+            }
+
+            $certificate = $request->file('education.' . $index . '.certificate');
+            $hasExistingCertificate = $existingEducation
+                && $existingEducation->certificate_path
+                && Storage::disk('local')->exists($existingEducation->certificate_path);
+
+            if (!$certificate && !$hasExistingCertificate) {
+                $validator->errors()->add(
+                    'education.' . $index . '.certificate',
+                    'Upload a certificate or marksheet for this qualification.'
+                );
+            }
+        }
+    }
+
+    private function saveEducationRecords(
+        Employee $employee,
+        array $educationRows,
+        Request $request,
+        array &$storedFiles,
+        $replaceExisting = false,
+        array &$obsoleteFiles = []
+    ) {
+        $submittedIds = [];
+
+        foreach ($educationRows as $index => $education) {
+            $educationId = $education['id'] ?? null;
+            $record = $educationId
+                ? $employee->educations()->where('id', $educationId)->firstOrFail()
+                : null;
+            $attributes = [
+                'level' => $education['level'],
+                'degree' => $education['degree'],
+                'institution' => $education['institution'],
+                'board_university' => $education['board_university'] ?? null,
+                'year_of_passing' => $education['year_of_passing'],
+                'grade' => $education['grade'] ?? null,
+            ];
+            $certificate = $request->file('education.' . $index . '.certificate');
+
+            if ($certificate) {
+                $path = $certificate->store('employee-documents', 'local');
+                if (!$path) {
+                    throw new \RuntimeException('The education certificate could not be stored.');
+                }
+                $storedFiles[] = $path;
+                if ($record && $record->certificate_path) {
+                    $obsoleteFiles[] = $record->certificate_path;
+                }
+                $attributes['certificate_path'] = $path;
+                $attributes['certificate_original_name'] = mb_substr(
+                    basename($certificate->getClientOriginalName()),
+                    0,
+                    255
+                );
+            }
+
+            if ($record) {
+                $record->update($attributes);
+                $submittedIds[] = $record->id;
+            } else {
+                $record = $employee->educations()->create($attributes);
+                $submittedIds[] = $record->id;
+            }
+        }
+
+        if ($replaceExisting) {
+            $removedRecords = $employee->educations()
+                ->when(!empty($submittedIds), function ($query) use ($submittedIds) {
+                    $query->whereNotIn('id', $submittedIds);
+                })
+                ->get();
+
+            foreach ($removedRecords as $record) {
+                if ($record->certificate_path) {
+                    $obsoleteFiles[] = $record->certificate_path;
+                }
+                $record->delete();
+            }
+        }
+    }
+
+    private function deleteObsoleteEducationCertificates(array $paths)
+    {
+        foreach (array_unique($paths) as $path) {
+            if (strpos($path, 'employee-documents/') !== 0) {
+                Log::warning('An education certificate was not deleted because its storage path is outside the employee document directory.');
+                continue;
+            }
+
+            if (Storage::disk('local')->exists($path) && !Storage::disk('local')->delete($path)) {
+                Log::warning('An obsolete education certificate could not be deleted.', [
+                    'storage_path' => $path,
+                ]);
+            }
+        }
+    }
+
+    private function deleteStoredOnboardingFiles(array $paths)
+    {
+        foreach (array_unique($paths) as $path) {
+            if (strpos($path, 'employee-documents/') !== 0) {
+                Log::warning('An onboarding upload was not deleted because its storage path is outside the employee document directory.');
+                continue;
+            }
+
+            if (Storage::disk('local')->exists($path) && !Storage::disk('local')->delete($path)) {
+                Log::warning('An onboarding upload could not be cleaned up after a failed save.', [
+                    'storage_path' => $path,
+                ]);
+            }
+        }
+    }
+
+    private function onboardingInput(Request $request)
+    {
+        $input = $request->except(['bank', 'documents', 'required_documents']);
+        if (isset($input['education']) && is_array($input['education'])) {
+            foreach ($input['education'] as &$education) {
+                if (is_array($education)) {
+                    unset($education['certificate']);
+                }
+            }
+            unset($education);
+        }
+
+        return $input;
     }
 
     private function savePreviousExperience(Employee $employee, array $experiences, $replace = false)

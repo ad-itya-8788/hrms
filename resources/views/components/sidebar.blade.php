@@ -21,7 +21,7 @@
         $roleLabel = 'Super Admin';
     } elseif ($user->role === 'hr') {
         $roleLabel = 'Human Resources';
-    } elseif ($user->role === 'employee') {
+    } elseif ($user->isEmployeeAccount()) {
         $roleLabel = 'Employee';
     } else {
         $roleLabel = ucwords(str_replace('_', ' ', $user->role));
@@ -159,6 +159,12 @@
             null,
             'leave'
         ],
+
+        'exit_pass' => [
+            'portal.exit-pass.index',
+            null,
+            'exit-pass'
+        ],
     ];
 
     /*
@@ -173,7 +179,8 @@
 
         if ($isSuperAdmin) {
             $permissions[] = $module;
-        } elseif ($user->hasPermission($module, 'view')) {
+        } elseif ($user->hasPermission($module, 'view')
+            || ($user->isDepartmentHead() && in_array($module, ['employees', 'leaves', 'exit_pass'], true))) {
             $permissions[] = $module;
         }
     }

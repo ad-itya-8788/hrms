@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Cache\RateLimiter;
@@ -70,7 +70,7 @@ class PortalController extends Controller
             ])->withInput($request->except('password'));
         }
 
-        if ($user->role === 'employee' && !$user->employee) {
+        if ($user->isEmployeeAccount() && !$user->employee) {
             Auth::logout();
             $this->limiter->hit($key, 60);
 

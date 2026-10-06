@@ -1,33 +1,40 @@
 <?php
 
-namespace App\Http\Controllers\SuperAdmin;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\LeaveApplication;
+use App\Models\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class LeaveController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $employee = auth()->user()->employee;
+        $user = $request->user();
+        $isHead = $user->isDepartmentHead();
+        abort_unless($user->hasPermission('leaves', 'view') || $isHead, 403);
 
-        if (!$employee) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Employee profile not found.'
-            ], 404);
+        $query = LeaveApplication::with('employee.department')
+            ->orderByDesc('created_at');
+        if ($isHead && !$user->isSuperAdmin()) {
+            $query->whereHas('employee', function ($employeeQuery) use ($user) {
+                $employeeQuery->whereIn('department_id', $user->headedDepartmentIds());
+            });
+        } elseif ($user->isEmployeeAccount()) {
+            $query->where('employee_id', $user->employee_id ?: 0);
         }
 
-        $leaves = LeaveApplication::where(
-            'employee_id',
-            $employee->id
-        )
-        ->orderBy('created_at', 'desc')
-        ->paginate(10);
+        $leaves = $query->paginate(10);
 
         return view('portal.leaves.index', [
-            'leaves' => $leaves
+            'leaves' => $leaves,
+            'canCreateLeaves' => $user->hasPermission('leaves', 'create'),
+            'canReviewLeaves' => $user->isSuperAdmin()
+                || ($user->hasPermission('leaves', 'edit') && !$isHead)
+                || $isHead,
+            'showEmployee' => !$user->isEmployeeAccount() || $isHead,
         ]);
     }
 
@@ -161,5 +168,42 @@ class LeaveController extends Controller
                 'status' => $leave->status
             ]
         ], 201);
+    }
+
+    public function updateStatus(Request $request, LeaveApplication $leave)
+    {
+        $attributes = $request->validate([
+            'status' => 'required|in:Approved,Rejected',
+            'admin_remark' => 'nullable|string|max:2000',
+        ]);
+        $user = $request->user();
+
+        $leave = DB::transaction(function () use ($leave, $attributes, $user) {
+            $lockedLeave = LeaveApplication::whereKey($leave->id)->lockForUpdate()->firstOrFail();
+            $employee = Employee::findOrFail($lockedLeave->employee_id);
+            abort_unless($user->canReviewDepartmentRequest($employee, 'leaves'), 403);
+            if (strtolower($lockedLeave->status) !== 'pending') {
+                abort(409, 'This leave request has already been reviewed.');
+            }
+
+            $lockedLeave->update([
+                'status' => $attributes['status'],
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+                'admin_remark' => $attributes['admin_remark'] ?? null,
+            ]);
+
+            return $lockedLeave;
+        });
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Leave request ' . strtolower($leave->status) . '.',
+                'data' => $leave,
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Leave request ' . strtolower($leave->status) . '.');
     }
 }
